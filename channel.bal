@@ -69,25 +69,28 @@ public isolated class Channel {
         }
 
         // Then execute all destinations in parallel
-        map<future<error?>> destinationExecutions = {};
+        map<future<ExecutionResult|error?>> destinationExecutions = {};
         foreach Destination destination in self.destinations {
             string destinationName = self.getDestinationName(destination);
             if msgContext.isDestinationSkipped(destinationName) {
                 log:printWarn("destination is requested to be skipped", destinationName = destinationName, msgId = msgContext.getId());
             } else {
-                future<error?> destinationExecution = start self.executeDestination(destination, msgContext.clone());
+                future<ExecutionResult|error?> destinationExecution = start self.executeDestination(destination, msgContext.clone());
                 destinationExecutions[destinationName] = destinationExecution;
             }
         }
 
         map<error> failedDestinations = {};
         foreach var [destinationName, destinationExecution] in destinationExecutions.entries() {
-            error? result = wait destinationExecution;
+            ExecutionResult|error? result = wait destinationExecution;
             if result is () {
                 // If the destination execution was successful, continue.
                 msgContext.skipDestination(destinationName);
                 log:printDebug("destination executed successfully", destinationName = destinationName, msgId = msgContext.getId());
                 continue;
+            } else if result is ExecutionResult {
+                // If the destination execution returned a result, so destination execution is skipped by a preprocessor.
+                log:printDebug("destination execution is skipped by a preprocessor", destinationName = destinationName, msgId = msgContext.getId());
             } else {
                 // If there was an error, collect the error.
                 failedDestinations[destinationName] = result;
@@ -120,7 +123,7 @@ public isolated class Channel {
         return;
     }
 
-    isolated function executeDestination(Destination destination, MessageContext msgContext) returns error? {
+    isolated function executeDestination(Destination destination, MessageContext msgContext) returns ExecutionResult|error? {
         // Execute the preprocessors if any
         Processor[]? preprocessors = self.getDestinationPreprocessors(destination);
         if preprocessors is () {
@@ -139,7 +142,7 @@ public isolated class Channel {
             }
             if result is ExecutionResult {
                 // If the preprocessor execution is returned with a result, stop further processing.
-                return;
+                return result;
             }
         }
         // Execute the destination
