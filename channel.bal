@@ -133,15 +133,6 @@ public isolated class Channel {
     isolated function executeProcessor(Processor processor, MessageContext msgContext) returns SourceExecutionResult|error? {
         string processorName = self.getProcessorName(processor);
         string id = msgContext.getId();
-        
-        Filter? filter = self.getFilter(processor);
-        if filter is Filter {
-            boolean filterResult = check filter(msgContext);
-            if !filterResult {
-                log:printDebug("processor filter returned false, skipping further processing", processorName = processorName, msgId = id);
-                return {message: {...msgContext.getMessage()}};
-            }
-        }
 
         if processor is GenericProcessor {
             check processor(msgContext);
@@ -152,6 +143,13 @@ public isolated class Channel {
                 log:printDebug("processor filter returned false, skipping further processing", processorName = processorName, msgId = msgContext.getId());
                 return {message: {...msgContext.getMessage()}};
             }
+        } else if processor is ProcessorRouter {
+            Processor? routedProcessor = check processor(msgContext);
+            if routedProcessor is () {
+                log:printDebug("source router returned no processor, skipping further processing", msgId = msgContext.getId());
+                return {message: {...msgContext.getMessage()}};
+            }
+            return self.executeProcessor(routedProcessor, msgContext);
         } else {
             anydata transformedContent = check processor(msgContext);
             msgContext.setContent(transformedContent);
@@ -218,6 +216,10 @@ public isolated class Channel {
         if name is string {
             return name;
         }
+        name = (typeof processor).@ProcessorRouterConfig?.name;
+        if name is string {
+            return name;
+        }
         name = (typeof processor).@FilterConfig?.name;
         if name is string {
             return name;
@@ -248,14 +250,6 @@ public isolated class Channel {
 
     isolated function getDestinationPreprocessors(Destination destination) returns Processor[]? {
         return (typeof destination).@DestinationConfig?.preprocessors;
-    };
-
-    isolated function getFilter(Processor processor) returns Filter? {
-        Filter? filter = (typeof processor).@ProcessorConfig?.filter;
-        if filter is Filter {
-            return filter;
-        }
-        return (typeof processor).@TransformerConfig?.filter;
     };
 
     isolated function addToDLStore(MessageContext msgContext) {

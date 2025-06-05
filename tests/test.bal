@@ -11,16 +11,15 @@ type Order record {|
     "PENDING"|"PROCESSED" status;
 |};
 
-@FilterConfig {
-    name: "dataTypeFilter"
+@ProcessorRouterConfig {
+    name: "dataTypeRouter"
 }
-isolated function dataTypeFilter(MessageContext msgCtx) returns boolean|error {
-    return msgCtx.getContent() is record{};
+isolated function dataTypeRouter(MessageContext msgCtx) returns Processor|error? {
+    return msgCtx.getContent() is record {} ? transformProcessor : ();
 }
 
 @TransformerConfig {
-    name: "transformer",
-    filter:  dataTypeFilter
+    name: "transformer"
 }
 isolated function transformProcessor(MessageContext msgCtx) returns Order|error {
     msgCtx.setProperty("transformer", "executed");
@@ -101,7 +100,7 @@ MockDLS dls = new ();
 function testChannelExecution1() returns error? {
     Channel channel = check new ({
         processors: [
-            transformProcessor,
+            dataTypeRouter,
             filterProcessor,
             processProcessor
         ],
@@ -131,7 +130,7 @@ function testChannelExecution1() returns error? {
 function testChannelExecution2() returns error? {
     Channel channel = check new ({
         processors: [
-            transformProcessor,
+            dataTypeRouter,
             filterProcessor,
             processProcessor
         ],
@@ -141,7 +140,7 @@ function testChannelExecution2() returns error? {
         ],
         dlstore: dls
     });
-    
+
     Order 'order = {
         id: "order-101",
         customerId: "customer-456",
@@ -153,8 +152,8 @@ function testChannelExecution2() returns error? {
 
     ExecutionResult result = check channel.execute('order);
     test:assertEquals(result.destinationResults, {
-        "genericDestination": "Order saved in the generic destination"
-    }, "Generic destination should be executed for pending orders");
+                                                     "genericDestination": "Order saved in the generic destination"
+                                                 }, "Generic destination should be executed for pending orders");
     string fileName = "./target/test-resources/" + 'order.id + ".json";
     test:assertTrue(check file:test(fileName, file:EXISTS));
 
@@ -168,7 +167,7 @@ function testChannelExecution2() returns error? {
 function testChannelExecution3() returns error? {
     Channel channel = check new ({
         processors: [
-            transformProcessor,
+            dataTypeRouter,
             filterProcessor,
             processProcessor
         ],
@@ -178,7 +177,7 @@ function testChannelExecution3() returns error? {
         ],
         dlstore: dls
     });
-    
+
     Order 'order = {
         id: "order-102",
         customerId: "customer-456",
@@ -190,9 +189,9 @@ function testChannelExecution3() returns error? {
 
     ExecutionResult result = check channel.execute('order);
     test:assertEquals(result.destinationResults, {
-        "genericDestination": "Order saved in the generic destination",
-        "specialDestination": "Order saved in the special destination"
-    }, "Both destinations should be executed for pending orders with total price > 10000");
+                                                     "genericDestination": "Order saved in the generic destination",
+                                                     "specialDestination": "Order saved in the special destination"
+                                                 }, "Both destinations should be executed for pending orders with total price > 10000");
     string fileName = "./target/test-resources/special/" + 'order.id + ".json";
     test:assertTrue(check file:test(fileName, file:EXISTS));
 
@@ -206,7 +205,7 @@ function testChannelExecution3() returns error? {
 function testChannelExecution4() returns error? {
     Channel channel = check new ({
         processors: [
-            transformProcessor,
+            dataTypeRouter,
             filterProcessor,
             processProcessor
         ],
@@ -224,7 +223,7 @@ function testChannelExecution4() returns error? {
 function testChannelExecution5() returns error? {
     Channel channel = check new ({
         processors: [
-            transformProcessor,
+            dataTypeRouter,
             filterProcessor,
             processProcessor
         ],

@@ -10,7 +10,7 @@ At the heart of messaging are these fundamental concepts:
 
 - **Message Context**: This is the single, dynamic container that holds *everything* about the current message being processed. It contains the *Message* itself, along with any additional data or state that processors and destinations need to share or update during the message's journey. Think of it as the message's backpack, accumulating information as it moves.
 
-- **Processor**: These are the *idempotent* workhorses of your pipeline. A *Processor* takes the *Context* (and thus the *Message* within it) and performs an action that transforms or filters the message. Because they are idempotent, running them multiple times with the same input *Context* will always produce the same result, making replay safe. If a processor decides a message should not continue, it can effectively act as a filter, preventing further processing or delivery.
+- **Processor**: These are the *idempotent* workhorses of your pipeline. A *Processor* takes the *Context* (and thus the *Message* within it) and performs an action that transforms or filters or routes the message to a different processor. Because they are idempotent, running them multiple times with the same input *Context* will always produce the same result, making replay safe. If a processor decides a message should not continue, it can effectively act as a filter, preventing further processing or delivery.
 
 - **Destination:** These are the final delivery points for your processed messages. A Destination takes the *copy of the Context* and delivers the message contained within to an external system, a database, another queue, or any other endpoint. Unlike Processors, these functions do not need to be idempotent, as they represent terminal actions.
 
@@ -29,6 +29,7 @@ At the heart of messaging are these fundamental concepts:
    - The *Channel* iterates through its configured *Processors* one by one.
    - Each *Processor* receives the *Context* object. It accesses the *Message* from the *Context* and can modify the message's content, update its metadata, or add information to the *Context* itself.
    - If a *Processor* decides to "drop" the message, can act as a filter. The *Channel* recognizes this signal and skips all subsequent processors and destinations for that message, marking it as successfully handled (dropped).
+   - If a *Processor* decides to route the message to a different processor, it returns the target processor, and the *Channel* continues processing with that processor instead of the next one in line.
    - If any *Processor* encounters an error, the *Channel* catches it and sends the original *Message* and the current *Context* to the *DeadLetterStore* if configured to do so. This allows for later inspection and potential replay of the message.
 
 4. **Parallel Delivery (Destinations):**
@@ -66,15 +67,16 @@ At the heart of messaging are these fundamental concepts:
 The package provides three types of processors:
 
 - **Filter**: A processor that can drop messages based on a condition. This accepts the *Context* and returns a boolean indicating whether the message should continue processing.
-- **Transformer**: A processor that modifies the message content or metadata. It accepts the *Context* and returns a modified message content. Additionally, it can be configured with a *Filter* to determine if the transformation should be applied.
-- Generic Processor: A processor that can perform any action on the *Context*. It accepts the *Context* and returns nothing. Additionally, it can be configured with a *Filter* to determine if the action should be applied.
+- **Transformer**: A processor that modifies the message content or metadata. It accepts the *Context* and returns a modified message content.
+- **ProcessorRouter**: A processor that can route messages to different processors based on some criteria. It accepts the *Context* and returns the target processor to which the message should be routed. This allows for dynamic routing of messages based on their content or metadata.
+- Generic Processor: A processor that can perform any action on the *Context*. It accepts the *Context* and returns nothing.
 
 > **Note:** All processors are assumed to be idempotent, meaning that running them multiple times with the same input will always produce the same result. This is crucial for safe message replay. It is developer's responsibility to ensure that the logic within these processors adheres to this principle.
 
 ### Defining a Filter Processor
 
 ```ballerina
-@messaging:Processor {name: "filter"}
+@messaging:Filter {name: "filter"}
 isolated function filter(messaging:Context context) returns boolean|error {
     // Check some condition on the message
 }
@@ -83,23 +85,20 @@ isolated function filter(messaging:Context context) returns boolean|error {
 ### Defining a Transformer Processor
 
 ```ballerina
-@messaging:Processor {name: "transformer"}
+@messaging:Transformer {name: "transformer"}
 isolated function transformer(messaging:Context context) returns anydata|error {
     // Modify the message content or metadata
     // Return the modified message content
 }
 ```
 
-### Defining a Transformer Processor with a Filter
+### Defining a Processor Router
 
 ```ballerina
-@messaging:Processor {
-    name: "transformerWithFilter",
-    filter: filter // a filter function to determine if the transformation should be applied
-}
-isolated function transformerWithFilter(messaging:Context context) returns anydata|error {
-    // Modify the message content or metadata
-    // Return the modified message content
+@messaging:ProcessingRouter {name: "processorRouter"}
+isolated function processorRouter(messaging:Context context) returns messaging:Processor|error {
+    // Determine the target processor based on some criteria
+    // Return the target processor to which the message should be routed
 }
 ```
 
