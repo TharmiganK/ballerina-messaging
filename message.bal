@@ -1,0 +1,30 @@
+# Message type represents a message with content, error information, metadata, and properties.
+# 
+# + id - Unique identifier for the message.
+# + content - The actual content of the message, which can be of any data type.
+# + errorMsg - Optional error message if an error occurred during processing.
+# + errorStackTrace - Optional stack trace of the error if available.
+# + metadata - Metadata associated with the message, such as processors to skip.
+# + properties - A map of additional properties associated with the message.
+public type Message record {|
+    string id;
+    anydata content;
+    string errorMsg?;
+    string errorStackTrace?;
+    MessageMetadata metadata = {};
+    map<anydata> properties = {};
+|};
+
+# Message metadata.
+# 
+# + skipDestinations - An array of destination names that should be skipped when processing the message.
+public type MessageMetadata record {|
+    string[] skipDestinations = [];
+|};
+
+# Channel message execution result.
+# 
+# + message - The message that was processed.
+public type ExecutionResult record {|
+    Message message;
+|};
