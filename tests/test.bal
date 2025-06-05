@@ -1,65 +1,114 @@
-import ballerina/log;
-import ballerina/test;
+// import ballerina/io;
+// import ballerina/test;
+// import ballerina/file;
 
-@HandlerConfig {
-    name: "handler1"
-}
-isolated function handleMsg1(MessageContext msgCtx) returns error? {
-    // Simulate handling the message
-    anydata content = msgCtx.getContent();
-    msgCtx.setProperty("handler1", "success");
-    // Here you can add your handling logic
-    log:printInfo("message processed by handler1", content = content);
-}
+// type Order record {|
+//     string id;
+//     string customerId;
+//     string itemId;
+//     int quantity;
+//     int unitPrice;
+//     "PENDING"|"PROCESSED" status;
+// |};
 
-@HandlerConfig {
-    name: "handler2"
-}
-isolated function handleMsg2(MessageContext msgCtx) returns error? {
-    // Simulate handling the message
-    anydata content = msgCtx.getContent();
-    msgCtx.setProperty("handler2", "success");
-    // Here you can add your handling logic
-    log:printInfo("message processed by handler2", content = content);
-}
+// @TransformerConfig {
+//     name: "transformer"
+// }
+// isolated function transformProcessor(MessageContext msgCtx) returns Order|error {
+//     anydata content = msgCtx.getContent();
+//     return content.toJson().fromJsonWithType();
+// }
 
-@test:Config
-function testMessageHandling() returns error? {
-    Channel msgChannel = check new Channel([handleMsg1, handleMsg2]);
-    ExecutionResult result = check msgChannel.execute(content = "Test message content");
-    test:assertEquals(result.message.properties, {
-        "handler1": "success",
-        "handler2": "success"
-    }, msg = "Message properties should contain handler results");
-}
+// @FilterConfig {
+//     name: "filter"
+// }
+// isolated function filterProcessor(MessageContext msgCtx) returns boolean|error {
+//     Order 'order = check msgCtx.getContent().ensureType();
+//     return 'order.status == "PENDING";
+// }
 
-@test:Config
-function testChannelCreationFailure1() returns error? {
-    Channel|error msgChannel = new Channel([]);
-    if msgChannel is Channel {
-        // If the channel was created successfully, we should fail the test
-        test:assertFail("Channel creation should have failed due to handler failure");
-    }
-    test:assertEquals(msgChannel.message(), "Channel must have at least one handler.", msg = "Channel creation should fail with an error message");
-}
+// @ProcessorConfig {
+//     name: "processor"
+// }
+// isolated function processProcessor(MessageContext msgCtx) returns error? {
+//     Order 'order = check msgCtx.getContent().ensureType();
+//     int totalPrice = 'order.quantity * 'order.unitPrice;
+//     msgCtx.setProperty("totalPrice", totalPrice);
+// }
 
-isolated function handleMsgFail(MessageContext msgCtx) returns error? {}
+// @DestinationConfig {
+//     name: "genericDestination"
+// }
+// isolated function genericDestination(MessageContext msgCtx) returns error? {
+//     Order 'order = check msgCtx.getContent().ensureType();
+//     int totalPrice = check msgCtx.getProperty("totalPrice").ensureType(int);
+//     string fileName = "./target/test-resources/" + 'order.id + ".json";
+//     check io:fileWriteJson(fileName, {totalPrice, ...'order});
+// }
 
-@test:Config
-function testChannelCreationFailure2() returns error? {
-    Channel|error msgChannel = new Channel([handleMsgFail]);
-    if msgChannel is Channel {
-        // If the channel was created successfully, we should fail the test
-        test:assertFail("Channel creation should have failed due to handler failure");
-    }
-    test:assertEquals(msgChannel.message(), "Handler name is not defined for one or more handlers.", msg = "Channel creation should fail with an error message");
-}
+// isolated function destinationFilter(MessageContext msgCtx) returns boolean|error {
+//     // Only process orders with a total price greater than 10000
+//     int totalPrice = check msgCtx.getProperty("totalPrice").ensureType(int);
+//     return totalPrice > 10000;
+// }
 
-@test:Config
-function testSkipMessageHandling() returns error? {
-    Channel msgChannel = check new Channel([handleMsg1, handleMsg2]);
-    ExecutionResult result = check msgChannel.execute("Test message content", skipHandlers = ["handler1"]);
-    test:assertEquals(result.message.properties, {
-        "handler2": "success"
-    }, msg = "Message properties should only contain results from handlers that were not skipped");
-}
+// @DestinationConfig {
+//     name: "specialDestination",
+//     preprocessors: [destinationFilter]
+// }
+// isolated function specialDestination(MessageContext msgCtx) returns error? {
+//     Order 'order = check msgCtx.getContent().ensureType();
+//     int totalPrice = check msgCtx.getProperty("totalPrice").ensureType(int);
+//     string fileName = "./target/test-resources/special-" + 'order.id + ".json";
+//     check io:fileWriteJson(fileName, {totalPrice, ...'order});
+// }
+
+// isolated class MockDLS {
+//     *DeadLetterStore;
+
+//     public isolated function clear() returns error? {
+//         return;
+//     }
+
+//     public isolated function retrieve() returns Message|error? {
+//         return;
+//     }
+
+//     public isolated function store(Message msg) returns error? {
+//         string fileName = "./target/test-resources/dls-" + msg.id + ".json";
+//         check io:fileWriteJson(fileName, msg.toJson());
+//         return;
+//     }
+// }
+
+// MockDLS dls = new ();
+
+// Channel channel = check new (
+//     [
+//         transformProcessor,
+//         filterProcessor,
+//         processProcessor
+//     ],
+//     [
+//         genericDestination,
+//         specialDestination
+//     ],
+//     dls
+// );
+
+// @test:Config
+// function testChannelExecution1() returns error? {
+//     Order 'order = {
+//         id: "order-123",
+//         customerId: "customer-456",
+//         itemId: "item-789",
+//         quantity: 10,
+//         unitPrice: 80,
+//         status: "PROCESSED"
+//     };
+
+//     ExecutionResult result = check channel.execute('order);
+//     string id = result.message.id;
+//     string fileName = "./target/test-resources/" + id + ".json";
+//     test:assertFalse(check file:test(fileName, file:EXISTS));
+// }

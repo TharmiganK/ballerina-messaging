@@ -1,9 +1,9 @@
 import ballerinax/rabbitmq;
 
 # Dead Letter Store Type
-public type DLStore isolated object {
+public type DeadLetterStore isolated object {
     # Store the message in the dead letter store.
-    # 
+    #
     # + msg - The message to store in the dead letter store.
     # + return - An error if the message could not be stored, otherwise returns `()`.
     public isolated function store(Message msg) returns error?;
@@ -14,13 +14,13 @@ public type DLStore isolated object {
     public isolated function retrieve() returns Message|error?;
 
     # Clear all messages from the dead letter store.
-    # 
+    #
     # + return - An error if the messages could not be cleared, otherwise returns `()`.
     public isolated function clear() returns error?;
 };
 
 # RabbitMQ Publish Message Configuration
-# 
+#
 # + exchange - The exchange to publish the message to.
 # + deliveryTag - The delivery tag for the message, if applicable.
 # + properties - The properties of the message, if applicable.
@@ -32,14 +32,14 @@ public type RabbitMqPublishMessageConfiguration record {|
 
 # Dead Letter Store implemented with RabbitMQ.
 public isolated class RabbitMqDLStore {
-    *DLStore;
+    *DeadLetterStore;
 
     private final rabbitmq:Client 'client;
     private final readonly & RabbitMqPublishMessageConfiguration publishConfig;
     private final string dlqRoutingKey;
 
     # Creates a new instance of RabbitMqDLStore.
-    # 
+    #
     # + host - The RabbitMQ host.
     # + port - The RabbitMQ port.
     # + dlqRoutingKey - The routing key for the dead letter queue.
@@ -53,27 +53,27 @@ public isolated class RabbitMqDLStore {
     }
 
     # Pops the message from the dead letter store.
-    # 
+    #
     # + return - An error if the message could not be retrieved, otherwise returns the message.
     public isolated function retrieve() returns Message|error? {
-        record{|*rabbitmq:AnydataMessage; Message content;|} message = check self.'client->consumeMessage(self.dlqRoutingKey);
+        record {|*rabbitmq:AnydataMessage; Message content;|} message = check self.'client->consumeMessage(self.dlqRoutingKey);
         return message.content;
     }
 
     # Store the message in the dead letter store.
-    # 
+    #
     # + msg - The message to store in the dead letter store.
     # + return - An error if the message could not be stored, otherwise returns `()`.
     public isolated function store(Message msg) returns error? {
         return self.'client->publishMessage({
-            content: msg, 
-            routingKey: self.dlqRoutingKey,  
+            content: msg,
+            routingKey: self.dlqRoutingKey,
             ...self.publishConfig
         });
     }
 
     # Clear all messages from the dead letter store.
-    # 
+    #
     # + return - An error if the messages could not be cleared, otherwise returns `()`.
     public isolated function clear() returns error? {
         return self.'client->queuePurge(self.dlqRoutingKey);

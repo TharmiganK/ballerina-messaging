@@ -145,13 +145,9 @@ public isolated class MessageContext {
     # 
     # + return - A new instance of MessageContext with the same message.
     public isolated function clone() returns MessageContext {
-        MessageContext clonedContext = new (self.message.clone());
-        return clonedContext;
-    }
-
-    public isolated function revert(MessageContext snapshot) {
         lock {
-            self.message = snapshot.getMessage();
+            MessageContext clonedContext = new (self.message.clone());
+            return clonedContext;
         }
     }
 }

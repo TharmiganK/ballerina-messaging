@@ -5,12 +5,14 @@ public type Transformer isolated function (MessageContext msgCtx) returns anydat
 public type Filter isolated function (MessageContext msgCtx) returns boolean|error;
 
 # Represents a destination function that processes the message context and returns an error if the message could not be sent to the destination.
+# Destinations are typically contains a sender or a writer that sends or writes the message to a specific destination.
 public type Destination isolated function (MessageContext msgCtx) returns error?;
 
 # Represents a generic message processor that can process the message and return an error if the processing fails.
 public type GenericProcessor isolated function (MessageContext msgCtx) returns error?;
 
 # Represents a processor that can be a filter, transformer, or processor and can be attached to a channel for processing messages.
+# Processors should be idompotent i.e. repeating the execution should not change the outcome or the channel state.
 public type Processor GenericProcessor|Filter|Transformer;
 
 # Represents a destination configuration that includes the name of the destination, an optional filter, and an optional transformer.
@@ -23,7 +25,7 @@ public type DestinationConfiguration record {|
 |};
 
 # Destination configuration annotation.
-public const annotation DestinationConfiguration DestinationConfig on function;
+public annotation DestinationConfiguration DestinationConfig on function;
 
 # Processor related configuration.
 # 
@@ -34,3 +36,9 @@ public type ProcessorConfiguration record {|
 
 # Processor configuration annotation.
 public const annotation ProcessorConfiguration ProcessorConfig on function;
+
+# Filter configuration annotation.
+public const annotation ProcessorConfiguration FilterConfig on function;
+
+# Transformer configuration annotation.
+public const annotation ProcessorConfiguration TransformerConfig on function;

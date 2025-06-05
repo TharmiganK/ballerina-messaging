@@ -1,189 +1,19 @@
-// import ballerina/log;
-// import ballerina/uuid;
-
-// # Channel is a collection of message handlers that can be executed in parallel or sequentially.
-// public isolated class Channel {
-//     final readonly & Handler[] handlers;
-//     final DLStore? dlstore;
-//     final boolean isParallel;
-//     final boolean continueOnError;
-
-//     # Initializes a new instance of Channel with the provided handlers.
-//     public isolated function init(Handler[] handlers, DLStore? dlstore = (), boolean isParallel = false, boolean continueOnError = false) returns Error? {
-//         self.handlers = handlers.cloneReadOnly();
-//         self.dlstore = dlstore;
-//         if isParallel && continueOnError {
-//             log:printWarn("continue on error is not applicable for parallel execution. It will be ignored.");
-//         }
-//         self.isParallel = isParallel;
-//         self.continueOnError = continueOnError;
-//         check self.validatehandlers(handlers.cloneReadOnly());
-//     }
-
-//     # Replay the channel execution flow.
-//     # 
-//     # + message - The message to replay process.
-//     # + return - Returns an error if any handler fails.
-//     public isolated function replay(Message message) returns DispatchResult|DispatchError {
-//         MessageContext msgContext = new(message);
-//         log:printDebug("replay channel execution started", msgId = msgContext.getId());
-//         return self.executeHandlersInParallel(msgContext);
-//     }
-
-//     # Dispatch a message to the channel for processing with the defined handlers.
-//     # 
-//     # + content - The message content to be processed.
-//     # + skipHandlers - An array of handler names to skip during execution.
-//     # + return - Returns an error if any handler fails.
-//     public isolated function execute(anydata content, string[] skipHandlers = []) returns DispatchResult|DispatchError {
-//         string id = uuid:createType1AsString();
-//         MessageContext msgContext = new (id = id, content = content, metadata = {skipHandlers: skipHandlers});
-//         log:printDebug("channel execution started", msgId = id);
-//         return self.executeHandlersInParallel(msgContext);
-//     }
-
-//     isolated function executeHandlers(MessageContext msgContext) returns DispatchResult|DispatchError {
-//         if self.isParallel {
-//             return self.executeHandlersInParallel(msgContext);
-//         } else {
-//             return self.executeHandlersSequentionally(msgContext);
-//         }
-//     }
-
-//     isolated function executeHandlersSequentionally(MessageContext msgContext) returns DispatchResult|DispatchError {
-//         string id = msgContext.getId();
-//         map<error> failedHandlers = {};
-//         foreach Handler handler in self.handlers {
-//             string? handlerName = self.getHandlerName(handler);
-//             if handlerName is () {
-//                 panic error Error("Handler name is not defined for one or more handlers");
-//             }
-//             if msgContext.isHandlerSkipped(handlerName) {
-//                 log:printWarn("handler is requested to be skipped", handlerName = handlerName, msgId = id);
-//             } else {
-//                 error? result = handler(msgContext);
-//                 if result is error {
-//                     log:printDebug("handler execution failed", handlerName = handlerName, msgId = id, 'error = result);
-//                     if self.continueOnError {
-//                         failedHandlers[handlerName] = result;
-//                         log:printDebug("continuing execution despite handler failure", handlerName = handlerName, msgId = id, 'error = result);
-//                     } else {
-//                         string errorMsg = string `Failed to execute handler: ${handlerName} - ${result.message()}`;
-//                         msgContext.setErrorMsg(errorMsg);
-//                         msgContext.setErrorStackTrace(result.stackTrace().toString());
-//                         self.addToDLStore(msgContext);
-//                         return error DispatchError(errorMsg, message = {...msgContext.getMessage()});
-//                     }
-//                 } else {
-//                     msgContext.skipHandler(handlerName);
-//                     log:printDebug("handler executed successfully", handlerName = handlerName, msgId = id);
-//                 }
-//             }
-//         }
-//         if failedHandlers.length() > 0 {
-//             return self.reportMutipleHandlerFailure(failedHandlers, msgContext);
-//         }
-//         return { message: {...msgContext.getMessage()} };
-//     }
-
-//     isolated function executeHandlersInParallel(MessageContext msgContext) returns DispatchResult|DispatchError {
-//         string id = msgContext.getId();
-//         map<future<error?>> handlerExecutions = {};
-//         foreach Handler handler in self.handlers {
-//             string? handlerName = self.getHandlerName(handler);
-//             if handlerName is () {
-//                 panic error Error("Handler name is not defined for one or more handlers");
-//             }
-//             if msgContext.isHandlerSkipped(handlerName) {
-//                 log:printWarn("handler is requested to be skipped", handlerName = handlerName, msgId = id);
-//             } else {
-//                 future<error?> handlerExecution = start handler(msgContext);
-//                 handlerExecutions[handlerName] = handlerExecution;
-//             }
-//         }
-//         map<error> failedhandlers = {};
-//         foreach var [handlerName, handlerExecution] in handlerExecutions.entries() {
-//             error? result = wait handlerExecution;
-//             if result is () {
-//                 // If the handler execution was successful, continue.
-//                 msgContext.skipHandler(handlerName);
-//                 log:printDebug("handler executed successfully", handlerName = handlerName, msgId = id);
-//                 continue;
-//             } else {
-//                 // If there was an error, collect the error.
-//                 failedhandlers[handlerName] = result;
-//                 log:printDebug("handler execution failed", handlerName = handlerName, msgId = id, 'error = result);
-//             }
-//         }
-//         if failedhandlers.length() > 0 {
-//             return self.reportMutipleHandlerFailure(failedhandlers, msgContext);
-//         }
-//         return { message: {...msgContext.getMessage()} };
-//     }
-
-//     isolated function reportMutipleHandlerFailure(map<error> failedHandlers, MessageContext msgContext) returns DispatchError {
-//         string errorMsg = "Failed to execute handlers: ";
-//         foreach var [handlerName, err] in failedHandlers.entries() {
-//             errorMsg += handlerName + " - " + err.message() + "; ";
-//         }
-//         msgContext.setErrorMsg(errorMsg.trim());
-//         string stackTrace = "";
-//         foreach var [handlerName, err] in failedHandlers.entries() {
-//             stackTrace += handlerName + " - " + err.stackTrace().toString() + "\n";
-//         }
-//         if stackTrace.length() > 0 {
-//             stackTrace = stackTrace.substring(0, stackTrace.length() - 1);
-//         }
-//         msgContext.setErrorStackTrace(stackTrace);
-        
-//         self.addToDLStore(msgContext);
-
-//         return error DispatchError(errorMsg, message = {...msgContext.getMessage()});
-//     }
-
-//     isolated function validatehandlers(Handler[] handlers) returns Error? {
-//         if handlers.length() == 0 {
-//             return error Error("Channel must have at least one handler.");
-//         }
-//         foreach Handler handler in handlers {
-//             string? handlerName = self.getHandlerName(handler);
-//             if handlerName is () {
-//                 return error Error("Handler name is not defined for one or more handlers.");
-//             }
-//         }
-//     }
-
-//     isolated function getHandlerName(Handler handler) returns string? {
-//         return (typeof handler).@HandlerConfig?.name;
-//     };
-
-//     isolated function addToDLStore(MessageContext msgContext) {
-//         DLStore? dlstore = self.dlstore;
-//         if dlstore is DLStore {
-//             string id = msgContext.getId();
-//             error? dlStoreError = dlstore.store(msgContext.getMessage());
-//             if dlStoreError is error {
-//                 log:printError("failed to add message to dead letter store", 'error = dlStoreError, msgId = id);
-//             } else {
-//                 log:printDebug("message added to dead letter store", msgId = id);
-//             }
-//         }
-//         log:printWarn("dead letter store is not configured, skipping storing the failed message", msgId = msgContext.getId());
-//         return;
-//     }
-// }
-
 import ballerina/log;
 import ballerina/uuid;
 
-# Channel is a collection of message handlers that can be executed in parallel or sequentially.
+# Channel is a collection of processors and destinations that can process messages in a defined flow.
 public isolated class Channel {
     final readonly & Processor[] processors;
     final readonly & Destination[] destinations;
-    final DLStore? dlstore;
+    final DeadLetterStore? dlstore;
 
     # Initializes a new instance of Channel with the provided processors and destinations.
-    public isolated function init(Processor[] processors = [], Destination[] destinations = [], DLStore? dlstore = ()) returns Error? {
+    #
+    # + processors - An array of processors to be executed in the channel.
+    # + destinations - An array of destinations to which the message will be sent.
+    # + dlstore - An optional dead letter store to handle messages that could not be processed.
+    # + return - An error if the channel could not be initialized, otherwise returns `()`.
+    public isolated function init(Processor[] processors = [], Destination[] destinations = [], DeadLetterStore? dlstore = ()) returns Error? {
         if processors.length() == 0 && destinations.length() == 0 {
             return error Error("Channel must have at least one processor or destination.");
         }
@@ -195,23 +25,23 @@ public isolated class Channel {
     }
 
     # Replay the channel execution flow.
-    # 
+    #
     # + message - The message to replay process.
-    # + return - Returns an error if any handler fails.
+    # + return - Returns an error if the message could not be processed, otherwise returns the execution result.
     public isolated function replay(Message message) returns ExecutionResult|ExecutionError {
-        MessageContext msgContext = new(message);
+        MessageContext msgContext = new (message);
         log:printDebug("replay channel execution started", msgId = msgContext.getId());
         return self.executeInternal(msgContext);
     }
 
-    # Dispatch a message to the channel for processing with the defined handlers.
-    # 
+    # Dispatch a message to the channel for processing with the defined processors and destinations.
+    #
     # + content - The message content to be processed.
-    # + skipHandlers - An array of handler names to skip during execution.
-    # + return - Returns an error if any handler fails.
-    public isolated function execute(anydata content, string[] skipHandlers = []) returns ExecutionResult|ExecutionError {
+    # + skipDestinations - An array of destination names to skip during execution.
+    # + return - Returns the execution result or an error if the processing failed.
+    public isolated function execute(anydata content, string[] skipDestinations = []) returns ExecutionResult|ExecutionError {
         string id = uuid:createType1AsString();
-        MessageContext msgContext = new (id = id, content = content, metadata = {skipDestinations: skipHandlers});
+        MessageContext msgContext = new (id = id, content = content, metadata = {skipDestinations: skipDestinations});
         log:printDebug("channel execution started", msgId = id);
         return self.executeInternal(msgContext);
     }
@@ -267,7 +97,7 @@ public isolated class Channel {
         if failedDestinations.length() > 0 {
             return self.reportDestinationFailure(failedDestinations, msgContext);
         }
-        return { message: {...msgContext.getMessage()} };
+        return {message: {...msgContext.getMessage()}};
     }
 
     isolated function executeProcessor(Processor processor, MessageContext msgContext) returns ExecutionResult|error? {
@@ -280,13 +110,14 @@ public isolated class Channel {
             boolean filterResult = check processor(msgContext);
             if !filterResult {
                 log:printDebug("processor filter returned false, skipping further processing", processorName = processorName, msgId = msgContext.getId());
-                return { message: {...msgContext.getMessage()} };
+                return {message: {...msgContext.getMessage()}};
             }
         } else {
             anydata transformedContent = check processor(msgContext);
             msgContext.setContent(transformedContent);
             log:printDebug("processor transformer executed successfully", processorName = processorName, msgId = msgContext.getId());
         }
+        return;
     }
 
     isolated function executeDestination(Destination destination, MessageContext msgContext) returns error? {
@@ -305,7 +136,7 @@ public isolated class Channel {
             ExecutionResult|error? result = self.executeProcessor(preprocessor, msgContext);
             if result is error {
                 return result;
-            } 
+            }
             if result is ExecutionResult {
                 // If the preprocessor execution is returned with a result, stop further processing.
                 return;
@@ -315,14 +146,14 @@ public isolated class Channel {
         return destination(msgContext);
     }
 
-    isolated function reportDestinationFailure(map<error> failedHandlers, MessageContext msgContext) returns ExecutionError {
-        string errorMsg = "Failed to execute handlers: ";
-        foreach var [handlerName, err] in failedHandlers.entries() {
+    isolated function reportDestinationFailure(map<error> failedDestinations, MessageContext msgContext) returns ExecutionError {
+        string errorMsg = "Failed to execute destinations: ";
+        foreach var [handlerName, err] in failedDestinations.entries() {
             errorMsg += handlerName + " - " + err.message() + "; ";
         }
         msgContext.setErrorMsg(errorMsg.trim());
         string stackTrace = "";
-        foreach var [handlerName, err] in failedHandlers.entries() {
+        foreach var [handlerName, err] in failedDestinations.entries() {
             stackTrace += handlerName + " - " + err.stackTrace().toString() + "\n";
         }
         if stackTrace.length() > 0 {
@@ -333,8 +164,8 @@ public isolated class Channel {
         return error ExecutionError(errorMsg, message = {...msgContext.getMessage()});
     }
 
-    isolated function validateProcessors(Processor[] handlers) returns Error? {
-        foreach Processor processor in handlers {
+    isolated function validateProcessors(Processor[] processors) returns Error? {
+        foreach Processor processor in processors {
             string|error processorName = trap self.getProcessorName(processor);
             if processorName is Error {
                 return processorName;
@@ -344,6 +175,14 @@ public isolated class Channel {
 
     isolated function getProcessorName(Processor processor) returns string {
         string? name = (typeof processor).@ProcessorConfig?.name;
+        if name is string {
+            return name;
+        }
+        name = (typeof processor).@FilterConfig?.name;
+        if name is string {
+            return name;
+        }
+        name = (typeof processor).@TransformerConfig?.name;
         if name is () {
             panic error Error("Processor name is not defined");
         }
@@ -372,8 +211,8 @@ public isolated class Channel {
     };
 
     isolated function addToDLStore(MessageContext msgContext) {
-        DLStore? dlstore = self.dlstore;
-        if dlstore is DLStore {
+        DeadLetterStore? dlstore = self.dlstore;
+        if dlstore is DeadLetterStore {
             string id = msgContext.getId();
             error? dlStoreError = dlstore.store(msgContext.getMessage());
             if dlStoreError is error {
