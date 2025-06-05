@@ -22,9 +22,18 @@ public type MessageMetadata record {|
     string[] skipDestinations = [];
 |};
 
-# Channel message execution result.
+# Source execution result.
 # 
 # + message - The message that was processed.
+type SourceExecutionResult record {|
+    Message message;
+|};
+
+# Channel execution result.
+# 
+# + message - The message that was processed.
+# + destinationResults - A map of destination names to their respective results.
 public type ExecutionResult record {|
     Message message;
+    map<any> destinationResults = {};
 |};

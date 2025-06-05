@@ -7,16 +7,6 @@ public type DeadLetterStore isolated object {
     # + msg - The message to store in the dead letter store.
     # + return - An error if the message could not be stored, otherwise returns `()`.
     public isolated function store(Message msg) returns error?;
-
-    # Retrieve the top message from the dead letter store.
-    #
-    # + return - An error if the message could not be retrieved, otherwise returns the message.
-    public isolated function retrieve() returns Message|error?;
-
-    # Clear all messages from the dead letter store.
-    #
-    # + return - An error if the messages could not be cleared, otherwise returns `()`.
-    public isolated function clear() returns error?;
 };
 
 # RabbitMQ Publish Message Configuration
@@ -52,14 +42,6 @@ public isolated class RabbitMqDLStore {
         self.dlqRoutingKey = dlqRoutingKey;
     }
 
-    # Pops the message from the dead letter store.
-    #
-    # + return - An error if the message could not be retrieved, otherwise returns the message.
-    public isolated function retrieve() returns Message|error? {
-        record {|*rabbitmq:AnydataMessage; Message content;|} message = check self.'client->consumeMessage(self.dlqRoutingKey);
-        return message.content;
-    }
-
     # Store the message in the dead letter store.
     #
     # + msg - The message to store in the dead letter store.
@@ -70,12 +52,5 @@ public isolated class RabbitMqDLStore {
             routingKey: self.dlqRoutingKey,
             ...self.publishConfig
         });
-    }
-
-    # Clear all messages from the dead letter store.
-    #
-    # + return - An error if the messages could not be cleared, otherwise returns `()`.
-    public isolated function clear() returns error? {
-        return self.'client->queuePurge(self.dlqRoutingKey);
     }
 }

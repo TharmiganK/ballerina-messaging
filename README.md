@@ -37,6 +37,7 @@ At the heart of messaging are these fundamental concepts:
    - *Destinations* are run in parallel (all at once).
    - Each *Destination* receives a *copy of the Context* (including the processed *Message* within it). This ensures that actions by one destination do not unintentionally interfere with others, especially in parallel execution.
    - If any *Destination* fails to deliver the message, the *Channel* intercepts the error. It then sends the original *Message* and the *Context* (as it stood just before the destination phase began, or at the point of failure) to the *DeadLetterStore* if configured.
+   - If all the *Destinations* succeed, the *ExecutionResult* will contain the results from each destionation as a map.
 
 5. **Dead Letter Store (DLS) Interaction:**
 
@@ -44,7 +45,7 @@ At the heart of messaging are these fundamental concepts:
    - When a message fails processing or delivery, the *Channel* persists the original *Message* and its *Context* in the *DeadLetterStore*.
    - The *Channel* also provides an API to replay a failed message. When replayed, the *Channel* accepts the processed context and attempts to reprocess the message through its configured *Processors* and *Destinations*. Additionally, the *Channel* intelligently skips any *Destinations* that have already successfully processed the message in previous attempts, ensuring that only the necessary steps are retried.
 
-![Messaging Flow Diagram](https://raw.githubusercontent.com/TharmiganK/ballerina-messaging/master/resources/diagram.png)
+<img src="https://raw.githubusercontent.com/TharmiganK/ballerina-messaging/master/resources/diagram.png" alt="Messaging Flow Diagram">
 
 ## Key features
 
@@ -65,8 +66,8 @@ At the heart of messaging are these fundamental concepts:
 The package provides three types of processors:
 
 - **Filter**: A processor that can drop messages based on a condition. This accepts the *Context* and returns a boolean indicating whether the message should continue processing.
-- **Transformer**: A processor that modifies the message content or metadata. It accepts the *Context* and returns a modified message content.
-- Generic Processor: A processor that can perform any action on the *Context*. It accepts the *Context* and returns nothing.
+- **Transformer**: A processor that modifies the message content or metadata. It accepts the *Context* and returns a modified message content. Additionally, it can be configured with a *Filter* to determine if the transformation should be applied.
+- Generic Processor: A processor that can perform any action on the *Context*. It accepts the *Context* and returns nothing. Additionally, it can be configured with a *Filter* to determine if the action should be applied.
 
 > **Note:** All processors are assumed to be idempotent, meaning that running them multiple times with the same input will always produce the same result. This is crucial for safe message replay. It is developer's responsibility to ensure that the logic within these processors adheres to this principle.
 
@@ -89,6 +90,19 @@ isolated function transformer(messaging:Context context) returns anydata|error {
 }
 ```
 
+### Defining a Transformer Processor with a Filter
+
+```ballerina
+@messaging:Processor {
+    name: "transformerWithFilter",
+    filter: filter // a filter function to determine if the transformation should be applied
+}
+isolated function transformerWithFilter(messaging:Context context) returns anydata|error {
+    // Modify the message content or metadata
+    // Return the modified message content
+}
+```
+
 ### Defining a Generic Processor
 
 ```ballerina
@@ -100,11 +114,11 @@ isolated function generic(messaging:Context context) returns error? {
 
 ## Defining a Destination
 
-A destination is similar to a generic processor but is used to deliver the message to an external system or endpoint. It accepts a copy of the *Context* and returns an error if the delivery fails.
+A destination is similar to a generic processor but is used to deliver the message to an external system or endpoint. It accepts a copy of the *Context* and returns an error if the delivery fails. Additionally, it can return any result that is relevant to the delivery operation, such as a confirmation or status.
 
 ```ballerina
 @messaging:Destination {name: "destination"}
-isolated function destination(messaging:Context context) returns error? {
+isolated function destination(messaging:Context context) returns any|error {
     // Deliver the message to an external system or endpoint
 }
 ```
@@ -116,7 +130,7 @@ A destination can additionally take one or more processors as preprocessors. The
     name: "destinationWithPreprocessors",
     preprocessors: [preprocessor1, preprocessor2] // a list of processor functions
 }
-isolated function destinationWithPreprocessors(messaging:Context context) returns error? {
+isolated function destinationWithPreprocessors(messaging:Context context) returns any|error {
     // Deliver the message to an external system or endpoint
 }
 ```
@@ -124,11 +138,8 @@ isolated function destinationWithPreprocessors(messaging:Context context) return
 ## Defining a Dead Letter Store
 
 The package expose an interface for defining a Dead Letter Store (DLS) that can be used to capture messages that fail during processing or delivery. The DLS should implement the `messaging:DeadLetterStore` interface.
-The DLS interface requires the implementation of three methods:
 
-- `store`: This method is used to store a message in the dead letter store. It takes a `Message` object and returns an error if the message could not be stored.
-- `retrieve`: This method retrieves the top message from the dead letter store. It returns a `Message` object or an error if the message could not be retrieved.
-- `clear`: This method clears all messages from the dead letter store. It returns an error if the messages could not be cleared.
+The DLS interface requires the implementation of the `store` method. This method is used to store a message in the dead letter store. It takes a `Message` object and returns an error if the message could not be stored.
 
 ## Creating a Channel
 

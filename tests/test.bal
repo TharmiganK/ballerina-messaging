@@ -11,10 +11,19 @@ type Order record {|
     "PENDING"|"PROCESSED" status;
 |};
 
+@FilterConfig {
+    name: "dataTypeFilter"
+}
+isolated function dataTypeFilter(MessageContext msgCtx) returns boolean|error {
+    return msgCtx.getContent() is record{};
+}
+
 @TransformerConfig {
-    name: "transformer"
+    name: "transformer",
+    filter:  dataTypeFilter
 }
 isolated function transformProcessor(MessageContext msgCtx) returns Order|error {
+    msgCtx.setProperty("transformer", "executed");
     anydata content = msgCtx.getContent();
     return content.toJson().fromJsonWithType();
 }
@@ -39,11 +48,12 @@ isolated function processProcessor(MessageContext msgCtx) returns error? {
 @DestinationConfig {
     name: "genericDestination"
 }
-isolated function genericDestination(MessageContext msgCtx) returns error? {
+isolated function genericDestination(MessageContext msgCtx) returns string|error {
     Order 'order = check msgCtx.getContent().ensureType();
     int totalPrice = check msgCtx.getProperty("totalPrice").ensureType(int);
     string fileName = "./target/test-resources/" + 'order.id + ".json";
     check io:fileWriteJson(fileName, {totalPrice, ...'order});
+    return "Order saved in the generic destination";
 }
 
 @FilterConfig {
@@ -59,11 +69,12 @@ isolated function destinationFilter(MessageContext msgCtx) returns boolean|error
     name: "specialDestination",
     preprocessors: [destinationFilter]
 }
-isolated function specialDestination(MessageContext msgCtx) returns error? {
+isolated function specialDestination(MessageContext msgCtx) returns string|error {
     Order 'order = check msgCtx.getContent().ensureType();
     int totalPrice = check msgCtx.getProperty("totalPrice").ensureType(int);
-    string fileName = "./target/test-resources/special-" + 'order.id + ".json";
+    string fileName = "./target/test-resources/special/" + 'order.id + ".json";
     check io:fileWriteJson(fileName, {totalPrice, ...'order});
+    return "Order saved in the special destination";
 }
 
 isolated class MockDLS {
@@ -78,7 +89,7 @@ isolated class MockDLS {
     }
 
     public isolated function store(Message msg) returns error? {
-        string fileName = "./target/test-resources/dls-" + msg.id + ".json";
+        string fileName = "./target/test-resources/dls/" + msg.id + ".json";
         check io:fileWriteJson(fileName, msg.toJson());
         return;
     }
@@ -110,7 +121,8 @@ function testChannelExecution1() returns error? {
         status: "PROCESSED"
     };
 
-    ExecutionResult _ = check channel.execute('order);
+    ExecutionResult result = check channel.execute('order);
+    test:assertEquals(result.destinationResults, {}, "No destinations should be executed for processed orders");
     string fileName = "./target/test-resources/" + 'order.id + ".json";
     test:assertFalse(check file:test(fileName, file:EXISTS));
 }
@@ -139,7 +151,10 @@ function testChannelExecution2() returns error? {
         status: "PENDING"
     };
 
-    ExecutionResult _ = check channel.execute('order);
+    ExecutionResult result = check channel.execute('order);
+    test:assertEquals(result.destinationResults, {
+        "genericDestination": "Order saved in the generic destination"
+    }, "Generic destination should be executed for pending orders");
     string fileName = "./target/test-resources/" + 'order.id + ".json";
     test:assertTrue(check file:test(fileName, file:EXISTS));
 
@@ -173,12 +188,56 @@ function testChannelExecution3() returns error? {
         status: "PENDING"
     };
 
-    ExecutionResult _ = check channel.execute('order);
-    string fileName = "./target/test-resources/special-" + 'order.id + ".json";
+    ExecutionResult result = check channel.execute('order);
+    test:assertEquals(result.destinationResults, {
+        "genericDestination": "Order saved in the generic destination",
+        "specialDestination": "Order saved in the special destination"
+    }, "Both destinations should be executed for pending orders with total price > 10000");
+    string fileName = "./target/test-resources/special/" + 'order.id + ".json";
     test:assertTrue(check file:test(fileName, file:EXISTS));
 
     json fileContent = check io:fileReadJson(fileName);
     record {int totalPrice; *Order;} orderData = check fileContent.fromJsonWithType();
     test:assertEquals(orderData.id, 'order.id);
     test:assertEquals(orderData.totalPrice, 15000);
+}
+
+@test:Config
+function testChannelExecution4() returns error? {
+    Channel channel = check new ({
+        processors: [
+            transformProcessor,
+            filterProcessor,
+            processProcessor
+        ],
+        destinations: [
+            genericDestination,
+            specialDestination
+        ],
+        dlstore: dls
+    });
+    ExecutionResult result = check channel.execute("'order");
+    test:assertFalse(result.message.properties.hasKey("transformer"), "Transformer should not be executed for non-json content");
+}
+
+@test:Config
+function testChannelExecution5() returns error? {
+    Channel channel = check new ({
+        processors: [
+            transformProcessor,
+            filterProcessor,
+            processProcessor
+        ],
+        destinations: [
+            genericDestination,
+            specialDestination
+        ],
+        dlstore: dls
+    });
+    ExecutionResult|ExecutionError result = channel.execute({"test": "data"});
+    if result is ExecutionResult {
+        test:assertFail("Expected ExecutionError, but got ExecutionResult");
+    }
+    string fileName = "./target/test-resources/dls/" + result.detail().message.id + ".json";
+    test:assertTrue(check file:test(fileName, file:EXISTS), "Dead letter store should store the message with json content");
 }

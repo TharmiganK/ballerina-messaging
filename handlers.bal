@@ -4,9 +4,9 @@ public type Transformer isolated function (MessageContext msgCtx) returns anydat
 # Represents a filter function that checks the message context and returns a boolean indicating whether the message should be processed further.
 public type Filter isolated function (MessageContext msgCtx) returns boolean|error;
 
-# Represents a destination function that processes the message context and returns an error if the message could not be sent to the destination.
+# Represents a destination function that processes the message context and returns a result or an error if it failed to send the message to the destination.
 # Destinations are typically contains a sender or a writer that sends or writes the message to a specific destination.
-public type Destination isolated function (MessageContext msgCtx) returns error?;
+public type Destination isolated function (MessageContext msgCtx) returns any|error;
 
 # Represents a generic message processor that can process the message and return an error if the processing fails.
 public type GenericProcessor isolated function (MessageContext msgCtx) returns error?;
@@ -27,18 +27,27 @@ public type DestinationConfiguration record {|
 # Destination configuration annotation.
 public annotation DestinationConfiguration DestinationConfig on function;
 
+# Filter related configuration.
+# 
+# + name - The name of the filter.
+public type FilterConfiguration record {|
+    string name;
+|};
+
 # Processor related configuration.
 # 
 # + name - The name of the processor.
+# + filter - An optional filter to apply before the processor.
 public type ProcessorConfiguration record {|
     string name;
+    Filter filter?;
 |};
 
 # Processor configuration annotation.
 public const annotation ProcessorConfiguration ProcessorConfig on function;
 
 # Filter configuration annotation.
-public const annotation ProcessorConfiguration FilterConfig on function;
+public const annotation FilterConfiguration FilterConfig on function;
 
 # Transformer configuration annotation.
-public const annotation ProcessorConfiguration TransformerConfig on function;
+public annotation ProcessorConfiguration TransformerConfig on function;

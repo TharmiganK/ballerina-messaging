@@ -2,7 +2,7 @@ import ballerina/log;
 import ballerina/uuid;
 
 # Represent the configuration for a channel.
-# 
+#
 # + processors - An array of processors to be executed in the channel.
 # + destinations - An array of destinations to which the message will be sent.
 # + dlstore - An optional dead letter store to handle messages that could not be processed.
@@ -11,6 +11,20 @@ public type ChannelConfiguration record {|
     Destination[] destinations = [];
     DeadLetterStore? dlstore = ();
 |};
+
+isolated class SkippedDestination {
+    private final SourceExecutionResult executionResult;
+
+    isolated function init(SourceExecutionResult executionResult) {
+        self.executionResult = executionResult.clone();
+    }
+
+    isolated function getExecutionResult() returns SourceExecutionResult {
+        lock {
+            return self.executionResult.clone();
+        }
+    }
+};
 
 # Channel is a collection of processors and destinations that can process messages in a defined flow.
 public isolated class Channel {
@@ -64,7 +78,7 @@ public isolated class Channel {
         // First execute all processors
         foreach Processor processor in self.processors {
             string processorName = self.getProcessorName(processor);
-            ExecutionResult|error? result = self.executeProcessor(processor, msgContext);
+            SourceExecutionResult|error? result = self.executeProcessor(processor, msgContext);
             if result is error {
                 // If the processor execution failed, add to dead letter store and return error.
                 log:printDebug("processor execution failed", processorName = processorName, msgId = id, 'error = result);
@@ -73,35 +87,37 @@ public isolated class Channel {
                 msgCtxSnapshot.setErrorStackTrace(result.stackTrace().toString());
                 self.addToDLStore(msgCtxSnapshot);
                 return error ExecutionError(errorMsg, message = {...msgCtxSnapshot.getMessage()});
-            } else if result is ExecutionResult {
+            } else if result is SourceExecutionResult {
                 // If the processor execution is returned with a result, stop further processing.
-                return result;
+                return {...result};
             }
         }
 
         // Then execute all destinations in parallel
-        map<future<ExecutionResult|error?>> destinationExecutions = {};
+        map<future<any|error>> destinationExecutions = {};
         foreach Destination destination in self.destinations {
             string destinationName = self.getDestinationName(destination);
             if msgContext.isDestinationSkipped(destinationName) {
                 log:printWarn("destination is requested to be skipped", destinationName = destinationName, msgId = msgContext.getId());
             } else {
-                future<ExecutionResult|error?> destinationExecution = start self.executeDestination(destination, msgContext.clone());
+                future<any|error> destinationExecution = start self.executeDestination(destination, msgContext.clone());
                 destinationExecutions[destinationName] = destinationExecution;
             }
         }
 
         map<error> failedDestinations = {};
+        map<any> successfulDestinations = {};
         foreach var [destinationName, destinationExecution] in destinationExecutions.entries() {
-            ExecutionResult|error? result = wait destinationExecution;
-            if result is () {
+            any|error result = wait destinationExecution;
+            if result is SkippedDestination {
+                // If the destination execution returned a result, so destination execution is skipped by a preprocessor.
+                log:printDebug("destination execution is skipped by a preprocessor", destinationName = destinationName, msgId = msgContext.getId());
+            } else if result is any {
                 // If the destination execution was successful, continue.
                 msgContext.skipDestination(destinationName);
                 log:printDebug("destination executed successfully", destinationName = destinationName, msgId = msgContext.getId());
+                successfulDestinations[destinationName] = result;
                 continue;
-            } else if result is ExecutionResult {
-                // If the destination execution returned a result, so destination execution is skipped by a preprocessor.
-                log:printDebug("destination execution is skipped by a preprocessor", destinationName = destinationName, msgId = msgContext.getId());
             } else {
                 // If there was an error, collect the error.
                 failedDestinations[destinationName] = result;
@@ -111,12 +127,22 @@ public isolated class Channel {
         if failedDestinations.length() > 0 {
             return self.reportDestinationFailure(failedDestinations, msgContext);
         }
-        return {message: {...msgContext.getMessage()}};
+        return {message: {...msgContext.getMessage()}, destinationResults: successfulDestinations};
     }
 
-    isolated function executeProcessor(Processor processor, MessageContext msgContext) returns ExecutionResult|error? {
+    isolated function executeProcessor(Processor processor, MessageContext msgContext) returns SourceExecutionResult|error? {
         string processorName = self.getProcessorName(processor);
         string id = msgContext.getId();
+        
+        Filter? filter = self.getFilter(processor);
+        if filter is Filter {
+            boolean filterResult = check filter(msgContext);
+            if !filterResult {
+                log:printDebug("processor filter returned false, skipping further processing", processorName = processorName, msgId = id);
+                return {message: {...msgContext.getMessage()}};
+            }
+        }
+
         if processor is GenericProcessor {
             check processor(msgContext);
             log:printDebug("processor executed successfully", processorName = processorName, msgId = id);
@@ -134,7 +160,7 @@ public isolated class Channel {
         return;
     }
 
-    isolated function executeDestination(Destination destination, MessageContext msgContext) returns ExecutionResult|error? {
+    isolated function executeDestination(Destination destination, MessageContext msgContext) returns any|error {
         // Execute the preprocessors if any
         Processor[]? preprocessors = self.getDestinationPreprocessors(destination);
         if preprocessors is () {
@@ -147,13 +173,13 @@ public isolated class Channel {
                 log:printWarn("preprocessor is requested to be skipped", preprocessorName = preprocessorName, msgId = msgContext.getId());
                 continue;
             }
-            ExecutionResult|error? result = self.executeProcessor(preprocessor, msgContext);
+            SourceExecutionResult|error? result = self.executeProcessor(preprocessor, msgContext);
             if result is error {
                 return result;
             }
-            if result is ExecutionResult {
+            if result is SourceExecutionResult {
                 // If the preprocessor execution is returned with a result, stop further processing.
-                return result;
+                return new SkippedDestination(result);
             }
         }
         // Execute the destination
@@ -224,18 +250,27 @@ public isolated class Channel {
         return (typeof destination).@DestinationConfig?.preprocessors;
     };
 
+    isolated function getFilter(Processor processor) returns Filter? {
+        Filter? filter = (typeof processor).@ProcessorConfig?.filter;
+        if filter is Filter {
+            return filter;
+        }
+        return (typeof processor).@TransformerConfig?.filter;
+    };
+
     isolated function addToDLStore(MessageContext msgContext) {
         DeadLetterStore? dlstore = self.dlstore;
-        if dlstore is DeadLetterStore {
-            string id = msgContext.getId();
-            error? dlStoreError = dlstore.store(msgContext.getMessage());
-            if dlStoreError is error {
-                log:printError("failed to add message to dead letter store", 'error = dlStoreError, msgId = id);
-            } else {
-                log:printDebug("message added to dead letter store", msgId = id);
-            }
+        if dlstore is () {
+            log:printWarn("dead letter store is not configured, skipping storing the failed message", msgId = msgContext.getId());
+            return;
         }
-        log:printWarn("dead letter store is not configured, skipping storing the failed message", msgId = msgContext.getId());
+        string id = msgContext.getId();
+        error? dlStoreError = dlstore.store(msgContext.getMessage());
+        if dlStoreError is error {
+            log:printError("failed to add message to dead letter store", 'error = dlStoreError, msgId = id);
+        } else {
+            log:printDebug("message added to dead letter store", msgId = id);
+        }
         return;
     }
 }
