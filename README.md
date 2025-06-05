@@ -44,7 +44,7 @@ At the heart of messaging are these fundamental concepts:
    - When a message fails processing or delivery, the *Channel* persists the original *Message* and its *Context* in the *DeadLetterStore*.
    - The *Channel* also provides an API to replay a failed message. When replayed, the *Channel* accepts the processed context and attempts to reprocess the message through its configured *Processors* and *Destinations*. Additionally, the *Channel* intelligently skips any *Destinations* that have already successfully processed the message in previous attempts, ensuring that only the necessary steps are retried.
 
-![Messaging Flow Diagram](/resources/diagram.png)
+![Messaging Flow Diagram](https://raw.githubusercontent.com/TharmiganK/ballerina-messaging/master/resources/diagram.png)
 
 ## Key features
 
