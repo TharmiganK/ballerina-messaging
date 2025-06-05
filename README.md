@@ -135,18 +135,18 @@ The DLS interface requires the implementation of three methods:
 To create a channel, you need to define the processors and destinations that will be part of the message processing pipeline. You can configure the channel with a sequence of processors and a set of destinations.
 
 ```ballerina
-messaging:Channel channel = check new (
-    [
+messaging:Channel channel = check new ({
+    processors = [
         filter, // a filter processor
         transformer, // a transformer processor
         generic // a generic processor
     ],
-    [
+    destinations = [
         destination, // a destination
         destinationWithPreprocessors // a destination with preprocessors
     ],
-    deadLetterStore = deadLetterStore // an optional dead letter store
-);
+    dlstore = deadLetterStore // an optional dead letter store
+});
 ```
 
 ## Executing a Channel

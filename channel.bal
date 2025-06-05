@@ -1,6 +1,17 @@
 import ballerina/log;
 import ballerina/uuid;
 
+# Represent the configuration for a channel.
+# 
+# + processors - An array of processors to be executed in the channel.
+# + destinations - An array of destinations to which the message will be sent.
+# + dlstore - An optional dead letter store to handle messages that could not be processed.
+public type ChannelConfiguration record {|
+    Processor[] processors = [];
+    Destination[] destinations = [];
+    DeadLetterStore? dlstore = ();
+|};
+
 # Channel is a collection of processors and destinations that can process messages in a defined flow.
 public isolated class Channel {
     final readonly & Processor[] processors;
@@ -13,13 +24,13 @@ public isolated class Channel {
     # + destinations - An array of destinations to which the message will be sent.
     # + dlstore - An optional dead letter store to handle messages that could not be processed.
     # + return - An error if the channel could not be initialized, otherwise returns `()`.
-    public isolated function init(Processor[] processors = [], Destination[] destinations = [], DeadLetterStore? dlstore = ()) returns Error? {
-        if processors.length() == 0 && destinations.length() == 0 {
+    public isolated function init(*ChannelConfiguration config) returns Error? {
+        if config.processors.length() == 0 && config.destinations.length() == 0 {
             return error Error("Channel must have at least one processor or destination.");
         }
-        self.processors = processors.cloneReadOnly();
-        self.destinations = destinations.cloneReadOnly();
-        self.dlstore = dlstore;
+        self.processors = config.processors.cloneReadOnly();
+        self.destinations = config.destinations.cloneReadOnly();
+        self.dlstore = config.dlstore;
         check self.validateProcessors(self.processors);
         check self.validateDestinations(self.destinations);
     }

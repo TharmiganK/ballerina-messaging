@@ -88,18 +88,18 @@ MockDLS dls = new ();
 
 @test:Config
 function testChannelExecution1() returns error? {
-    Channel channel = check new (
-        [
+    Channel channel = check new ({
+        processors: [
             transformProcessor,
             filterProcessor,
             processProcessor
         ],
-        [
+        destinations: [
             genericDestination,
             specialDestination
         ],
-        dls
-    );
+        dlstore: dls
+    });
 
     Order 'order = {
         id: "order-100",
@@ -117,18 +117,18 @@ function testChannelExecution1() returns error? {
 
 @test:Config
 function testChannelExecution2() returns error? {
-    Channel channel = check new (
-        [
+    Channel channel = check new ({
+        processors: [
             transformProcessor,
             filterProcessor,
             processProcessor
         ],
-        [
+        destinations: [
             genericDestination,
             specialDestination
         ],
-        dls
-    );
+        dlstore: dls
+    });
     
     Order 'order = {
         id: "order-101",
@@ -151,18 +151,18 @@ function testChannelExecution2() returns error? {
 
 @test:Config
 function testChannelExecution3() returns error? {
-    Channel channel = check new (
-        [
+    Channel channel = check new ({
+        processors: [
             transformProcessor,
             filterProcessor,
             processProcessor
         ],
-        [
+        destinations: [
             genericDestination,
             specialDestination
         ],
-        dls
-    );
+        dlstore: dls
+    });
     
     Order 'order = {
         id: "order-102",
