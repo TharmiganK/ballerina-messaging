@@ -3,12 +3,12 @@ import ballerina/uuid;
 
 # Represent the configuration for a channel.
 #
-# + processors - An array of processors to be executed in the channel.
-# + destinations - An array of destinations to which the message will be sent.
+# + processor - An array of processors to be executed in the channel.
+# + destination - A single destination or an array of destinations or a destination router which will route the message to a destination.
 # + dlstore - An optional dead letter store to handle messages that could not be processed.
 public type ChannelConfiguration record {|
-    Processor[] processors = [];
-    Destination[] destinations = [];
+    Processor|Processor[] processor;
+    DestinationRouter|Destination|Destination[] destination;
     DeadLetterStore? dlstore = ();
 |};
 
@@ -26,27 +26,37 @@ isolated class SkippedDestination {
     }
 };
 
-# Channel is a collection of processors and destinations that can process messages in a defined flow.
+# Channel is a collection of processors and destination that can process messages in a defined flow.
 public isolated class Channel {
     final readonly & Processor[] processors;
-    final readonly & Destination[] destinations;
+    final readonly & (DestinationRouter|Destination[]) destination;
     final DeadLetterStore? dlstore;
 
-    # Initializes a new instance of Channel with the provided processors and destinations.
+    # Initializes a new instance of Channel with the provided processors and destination.
     #
     # + processors - An array of processors to be executed in the channel.
-    # + destinations - An array of destinations to which the message will be sent.
+    # + destination - A single destination or an array of destinations or a destination router which will route the message to a destination.
     # + dlstore - An optional dead letter store to handle messages that could not be processed.
     # + return - An error if the channel could not be initialized, otherwise returns `()`.
     public isolated function init(*ChannelConfiguration config) returns Error? {
-        if config.processors.length() == 0 && config.destinations.length() == 0 {
-            return error Error("Channel must have at least one processor or destination.");
+        readonly & (Processor|Processor[]) processors = config.processor.cloneReadOnly();
+        if processors is Processor {
+            self.processors = [processors];
+        } else {
+            self.processors = processors;
         }
-        self.processors = config.processors.cloneReadOnly();
-        self.destinations = config.destinations.cloneReadOnly();
+
+        readonly & (DestinationRouter|Destination|Destination[]) destination = config.destination.cloneReadOnly();
+        if destination is DestinationRouter {
+            self.destination = destination;
+        } else if destination is Destination {
+            self.destination = [destination];
+        } else {
+            self.destination = destination;
+        }
         self.dlstore = config.dlstore;
         check self.validateProcessors(self.processors);
-        check self.validateDestinations(self.destinations);
+        check self.validateDestinations(self.destination);
     }
 
     # Replay the channel execution flow.
@@ -93,14 +103,38 @@ public isolated class Channel {
             }
         }
 
+        DestinationRouter|Destination[] destination = self.destination;
+
+        if destination is DestinationRouter {
+            // If the destination is a router, execute the router to get the destination.
+            Destination|error? routedDestination = destination(msgContext);
+            if routedDestination is error {
+                // If the routing failed, add to dead letter store and return error.
+                log:printDebug("destination routing failed", msgId = id, 'error = routedDestination);
+                string errorMsg = string `Failed to route destination: ${routedDestination.message()}`;
+                msgCtxSnapshot.setErrorMsg(errorMsg);
+                msgCtxSnapshot.setErrorStackTrace(routedDestination.stackTrace().toString());
+                self.addToDLStore(msgCtxSnapshot);
+                return error ExecutionError(errorMsg, message = {...msgCtxSnapshot.getMessage()});
+            } else if routedDestination is () {
+                // If the routing returned no destination, skip further processing.
+                log:printDebug("destination router returned no destination, skipping further processing", msgId = id);
+                return {message: {...msgContext.getMessage()}};
+            } else {
+                // If the routing was successful, continue with the destination execution.
+                log:printDebug("destination routing successful", destinationName = self.getDestinationRouterName(destination), msgId = id);
+                destination = [routedDestination];
+            }
+        }
+
         // Then execute all destinations in parallel
         map<future<any|error>> destinationExecutions = {};
-        foreach Destination destination in self.destinations {
-            string destinationName = self.getDestinationName(destination);
+        foreach Destination destinationSingle in <Destination[]>destination {
+            string destinationName = self.getDestinationName(destinationSingle);
             if msgContext.isDestinationSkipped(destinationName) {
                 log:printWarn("destination is requested to be skipped", destinationName = destinationName, msgId = msgContext.getId());
             } else {
-                future<any|error> destinationExecution = start self.executeDestination(destination, msgContext.clone());
+                future<any|error> destinationExecution = start self.executeDestination(destinationSingle, msgContext.clone());
                 destinationExecutions[destinationName] = destinationExecution;
             }
         }
@@ -231,11 +265,18 @@ public isolated class Channel {
         return name;
     };
 
-    isolated function validateDestinations(Destination[] destinations) returns Error? {
-        foreach Destination destination in destinations {
-            string|error destinationName = trap self.getDestinationName(destination);
-            if destinationName is Error {
-                return error Error("Destination name is not defined for one or more destinations.");
+    isolated function validateDestinations(DestinationRouter|Destination[] destination) returns Error? {
+        if destination is DestinationRouter {
+            string|error routerName = trap self.getDestinationRouterName(destination);
+            if routerName is Error {
+                return routerName;
+            }
+        } else {
+            foreach Destination destinationSingle in destination {
+                string|error destinationName = trap self.getDestinationName(destinationSingle);
+                if destinationName is Error {
+                    return error Error("Destination name is not defined for one or more destinations.");
+                }
             }
         }
     }
@@ -244,6 +285,14 @@ public isolated class Channel {
         string? name = (typeof destination).@DestinationConfig?.name;
         if name is () {
             panic error Error("Destination name is not defined");
+        }
+        return name;
+    };
+
+    isolated function getDestinationRouterName(DestinationRouter destinationRouter) returns string {
+        string? name = (typeof destinationRouter).@DestinationRouterConfig?.name;
+        if name is () {
+            panic error Error("Destination router name is not defined");
         }
         return name;
     };

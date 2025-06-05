@@ -11,6 +11,9 @@ public type ProcessorRouter isolated function (MessageContext msgCtx) returns Pr
 # Destinations are typically contains a sender or a writer that sends or writes the message to a specific destination.
 public type Destination isolated function (MessageContext msgCtx) returns any|error;
 
+# Represents a destination router function that processes the message context and returns a destination or an error if the routing fails, or nil if it wants to stop processing the message.
+public type DestinationRouter isolated function (MessageContext msgCtx) returns Destination|error?;
+
 # Represents a generic message processor that can process the message and return an error if the processing fails.
 public type GenericProcessor isolated function (MessageContext msgCtx) returns error?;
 
@@ -48,3 +51,6 @@ public annotation ProcessorConfiguration TransformerConfig on function;
 
 # Processor router configuration annotation.
 public annotation ProcessorConfiguration ProcessorRouterConfig on function;
+
+# Destination router configuration annotation.
+public annotation ProcessorConfiguration DestinationRouterConfig on function;

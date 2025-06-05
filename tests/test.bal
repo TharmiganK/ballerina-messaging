@@ -55,18 +55,17 @@ isolated function genericDestination(MessageContext msgCtx) returns string|error
     return "Order saved in the generic destination";
 }
 
-@FilterConfig {
-    name: "destinationFilter"
+@DestinationRouterConfig {
+    name: "destinationRouter"
 }
-isolated function destinationFilter(MessageContext msgCtx) returns boolean|error {
+isolated function destinationRouter(MessageContext msgCtx) returns Destination|error {
     // Only process orders with a total price greater than 10000
     int totalPrice = check msgCtx.getProperty("totalPrice").ensureType(int);
-    return totalPrice > 10000;
+    return totalPrice > 10000 ? specialDestination : genericDestination;
 }
 
 @DestinationConfig {
-    name: "specialDestination",
-    preprocessors: [destinationFilter]
+    name: "specialDestination"
 }
 isolated function specialDestination(MessageContext msgCtx) returns string|error {
     Order 'order = check msgCtx.getContent().ensureType();
@@ -99,15 +98,12 @@ MockDLS dls = new ();
 @test:Config
 function testChannelExecution1() returns error? {
     Channel channel = check new ({
-        processors: [
+        processor: [
             dataTypeRouter,
             filterProcessor,
             processProcessor
         ],
-        destinations: [
-            genericDestination,
-            specialDestination
-        ],
+        destination: destinationRouter,
         dlstore: dls
     });
 
@@ -129,15 +125,12 @@ function testChannelExecution1() returns error? {
 @test:Config
 function testChannelExecution2() returns error? {
     Channel channel = check new ({
-        processors: [
+        processor: [
             dataTypeRouter,
             filterProcessor,
             processProcessor
         ],
-        destinations: [
-            genericDestination,
-            specialDestination
-        ],
+        destination: destinationRouter,
         dlstore: dls
     });
 
@@ -166,15 +159,12 @@ function testChannelExecution2() returns error? {
 @test:Config
 function testChannelExecution3() returns error? {
     Channel channel = check new ({
-        processors: [
+        processor: [
             dataTypeRouter,
             filterProcessor,
             processProcessor
         ],
-        destinations: [
-            genericDestination,
-            specialDestination
-        ],
+        destination: destinationRouter,
         dlstore: dls
     });
 
@@ -189,9 +179,8 @@ function testChannelExecution3() returns error? {
 
     ExecutionResult result = check channel.execute('order);
     test:assertEquals(result.destinationResults, {
-                                                     "genericDestination": "Order saved in the generic destination",
                                                      "specialDestination": "Order saved in the special destination"
-                                                 }, "Both destinations should be executed for pending orders with total price > 10000");
+                                                 }, "Special destination should be executed for pending orders with total price > 10000");
     string fileName = "./target/test-resources/special/" + 'order.id + ".json";
     test:assertTrue(check file:test(fileName, file:EXISTS));
 
@@ -204,15 +193,12 @@ function testChannelExecution3() returns error? {
 @test:Config
 function testChannelExecution4() returns error? {
     Channel channel = check new ({
-        processors: [
+        processor: [
             dataTypeRouter,
             filterProcessor,
             processProcessor
         ],
-        destinations: [
-            genericDestination,
-            specialDestination
-        ],
+        destination: destinationRouter,
         dlstore: dls
     });
     ExecutionResult result = check channel.execute("'order");
@@ -222,15 +208,12 @@ function testChannelExecution4() returns error? {
 @test:Config
 function testChannelExecution5() returns error? {
     Channel channel = check new ({
-        processors: [
+        processor: [
             dataTypeRouter,
             filterProcessor,
             processProcessor
         ],
-        destinations: [
-            genericDestination,
-            specialDestination
-        ],
+        destination: destinationRouter,
         dlstore: dls
     });
     ExecutionResult|ExecutionError result = channel.execute({"test": "data"});

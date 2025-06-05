@@ -134,6 +134,18 @@ isolated function destinationWithPreprocessors(messaging:Context context) return
 }
 ```
 
+## Defining a Destination Router
+
+A destination router is a special type of processor that can route messages to different destinations based on some criteria. It accepts the *Context* and returns the target destination to which the message should be routed.
+
+```ballerina
+@messaging:DestinationRouter {name: "destinationRouter"}
+isolated function destinationRouter(messaging:Context context) returns messaging:Destination|error {
+    // Determine the target destination based on some criteria
+    // Return the target destination to which the message should be routed
+}
+```
+
 ## Defining a Dead Letter Store
 
 The package expose an interface for defining a Dead Letter Store (DLS) that can be used to capture messages that fail during processing or delivery. The DLS should implement the `messaging:DeadLetterStore` interface.
