@@ -213,6 +213,7 @@ public isolated class Channel {
             }
             if result is SourceExecutionResult {
                 // If the preprocessor execution is returned with a result, stop further processing.
+                log:printDebug("preprocessor executed successfully, skipping destination execution", preprocessorName = preprocessorName, msgId = msgContext.getId());
                 return new SkippedDestination(result);
             }
         }
