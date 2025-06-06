@@ -145,21 +145,21 @@ public isolated class Channel {
             any|error result = wait destinationExecution;
             if result is SkippedDestination {
                 // If the destination execution returned a result, so destination execution is skipped by a preprocessor.
-                log:printDebug("destination execution is skipped by a preprocessor", destinationName = destinationName, msgId = msgContext.getId());
+                log:printDebug("destination execution is skipped by a preprocessor", destinationName = destinationName, msgId = msgCtxSnapshot.getId());
             } else if result is any {
                 // If the destination execution was successful, continue.
-                msgContext.skipDestination(destinationName);
-                log:printDebug("destination executed successfully", destinationName = destinationName, msgId = msgContext.getId());
+                msgCtxSnapshot.skipDestination(destinationName);
+                log:printDebug("destination executed successfully", destinationName = destinationName, msgId = msgCtxSnapshot.getId());
                 successfulDestinations[destinationName] = result;
                 continue;
             } else {
                 // If there was an error, collect the error.
                 failedDestinations[destinationName] = result;
-                log:printDebug("destination execution failed", destinationName = destinationName, msgId = msgContext.getId(), 'error = result);
+                log:printDebug("destination execution failed", destinationName = destinationName, msgId = msgCtxSnapshot.getId(), 'error = result);
             }
         }
         if failedDestinations.length() > 0 {
-            return self.reportDestinationFailure(failedDestinations, msgContext);
+            return self.reportDestinationFailure(failedDestinations, msgCtxSnapshot);
         }
         return {message: {...msgContext.getMessage()}, destinationResults: successfulDestinations};
     }
@@ -177,12 +177,14 @@ public isolated class Channel {
                 log:printDebug("processor filter returned false, skipping further processing", processorName = processorName, msgId = msgContext.getId());
                 return {message: {...msgContext.getMessage()}};
             }
+            log:printDebug("processor filter executed successfully", processorName = processorName, msgId = msgContext.getId());
         } else if processor is ProcessorRouter {
             Processor? routedProcessor = check processor(msgContext);
             if routedProcessor is () {
                 log:printDebug("source router returned no processor, skipping further processing", msgId = msgContext.getId());
                 return {message: {...msgContext.getMessage()}};
             }
+            log:printDebug("processor router executed successfully", processorName = processorName, msgId = msgContext.getId());
             return self.executeProcessor(routedProcessor, msgContext);
         } else {
             anydata transformedContent = check processor(msgContext);
