@@ -110,8 +110,7 @@ public isolated class Channel {
                 // If the processor execution failed, add to dead letter store and return error.
                 log:printDebug("processor execution failed", processorName = processorName, msgId = id, 'error = result);
                 string errorMsg = string `Failed to execute processor: ${processorName} - ${result.message()}`;
-                msgCtxSnapshot.setErrorMsg(errorMsg);
-                msgCtxSnapshot.setErrorStackTrace(result);
+                msgCtxSnapshot.setError(result, errorMsg);
                 self.addToDLStore(msgCtxSnapshot);
                 return error ExecutionError(errorMsg, message = {...msgCtxSnapshot.toRecord()});
             } else if result is SourceExecutionResult {
@@ -131,8 +130,7 @@ public isolated class Channel {
                 // If the routing failed, add to dead letter store and return error.
                 log:printDebug("destination routing failed", msgId = id, 'error = routedDestination);
                 string errorMsg = string `Failed to route destination by router: ${destinationRouterName} - ${routedDestination.message()}`;
-                msgCtxSnapshot.setErrorMsg(errorMsg);
-                msgCtxSnapshot.setErrorStackTrace(routedDestination);
+                msgCtxSnapshot.setError(routedDestination, errorMsg);
                 self.addToDLStore(msgCtxSnapshot);
                 return error ExecutionError(errorMsg, message = {...msgCtxSnapshot.toRecord()});
             } else if routedDestination is () {
@@ -244,8 +242,7 @@ public isolated class Channel {
             string destinationName = failedDestinations.keys()[0];
             error failedDestination = failedDestinations.get(destinationName);
             errorMsg = string `Failed to execute destination: ${destinationName} - ${failedDestination.message()}`;
-            msgContext.setErrorMsg(errorMsg);
-            msgContext.setErrorStackTrace(failedDestination);  
+            msgContext.setError(failedDestination, errorMsg); 
         } else {
             errorMsg = "Failed to execute destinations: ";
             foreach var [handlerName, err] in failedDestinations.entries() {
@@ -255,7 +252,7 @@ public isolated class Channel {
             if errorMsg.length() > 0 {
                 errorMsg = errorMsg.substring(0, errorMsg.length() - 2);
             }
-            msgContext.setErrorMsg(errorMsg.trim());
+            msgContext.setErrorMessage(errorMsg.trim());
         }
         self.addToDLStore(msgContext);
         return error ExecutionError(errorMsg, message = {...msgContext.toRecord()});

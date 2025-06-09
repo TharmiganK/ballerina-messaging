@@ -128,18 +128,26 @@ public isolated class MessageContext {
         }
     }
 
-    isolated function setErrorStackTrace(error err) {
+
+    # Set an error message on the message context.
+    # 
+    # + msg - The error message to set on the message context.
+    isolated function setErrorMessage(string msg) {
         lock {
-            self.message.errorStackTrace = createStackTrace(err);
+            self.message.errorMsg = msg;
         }
     }
 
-    # Set an error message on the message context.
+    # Set an error to the message context.
     #
     # + msg - The error message to set on the message context.
-    isolated function setErrorMsg(string msg) {
+    # + err - The error to set on the message context.
+    isolated function setError(error err, string? msg = ()) {
         lock {
-            self.message.errorMsg = msg;
+            string errorMsg = msg is string ? msg : err.message();
+            self.message.errorMsg = errorMsg;
+            self.message.errorStackTrace = createStackTrace(err);
+            self.message.errorDetails = createErrorDetailMap(err);
         }
     }
 
@@ -158,6 +166,7 @@ public isolated class MessageContext {
         lock {
             self.message.errorMsg = ();
             self.message.errorStackTrace = ();
+            self.message.errorDetails = ();
             self.message.destinationErrors = ();
         }
     }
@@ -166,7 +175,7 @@ public isolated class MessageContext {
 isolated function createErrorInfo(error err) returns ErrorInfo => {
     message: err.message(),
     stackTrace: createStackTrace(err),
-    detail: err.detail() is map<anydata> ? <map<anydata>>err.detail() : {}
+    detail: createErrorDetailMap(err)
 };
 
 isolated function createStackTrace(error err) returns string[] {
@@ -177,3 +186,5 @@ isolated function createStackTrace(error err) returns string[] {
     }
     return stackTraceStrings;
 }
+
+isolated function createErrorDetailMap(error err) returns map<anydata> => err.detail() is map<anydata> ? <map<anydata>>err.detail() : {};
