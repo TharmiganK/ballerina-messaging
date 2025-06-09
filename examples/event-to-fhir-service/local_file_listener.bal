@@ -5,7 +5,7 @@ import ballerina/io;
 import tharmigan/reliable.messaging;
 
 listener file:Listener directoryListener = new ({
-    path: "./data",
+    path: "./replay",
     recursive: false
 });
 
