@@ -98,12 +98,12 @@ MockDLS dls = new ();
 @test:Config
 function testChannelExecution1() returns error? {
     Channel channel = check new ({
-        processor: [
-            dataTypeRouter,
-            filterProcessor,
+        sourceFlow: [
+            dataTypeRouter, 
+            filterProcessor, 
             processProcessor
         ],
-        destination: destinationRouter,
+        destinationsFlow: destinationRouter,
         dlstore: dls
     });
 
@@ -125,12 +125,12 @@ function testChannelExecution1() returns error? {
 @test:Config
 function testChannelExecution2() returns error? {
     Channel channel = check new ({
-        processor: [
-            dataTypeRouter,
-            filterProcessor,
+        sourceFlow: [
+            dataTypeRouter, 
+            filterProcessor, 
             processProcessor
         ],
-        destination: destinationRouter,
+        destinationsFlow: destinationRouter,
         dlstore: dls
     });
 
@@ -159,12 +159,12 @@ function testChannelExecution2() returns error? {
 @test:Config
 function testChannelExecution3() returns error? {
     Channel channel = check new ({
-        processor: [
-            dataTypeRouter,
-            filterProcessor,
+        sourceFlow: [
+            dataTypeRouter, 
+            filterProcessor, 
             processProcessor
         ],
-        destination: destinationRouter,
+        destinationsFlow: destinationRouter,
         dlstore: dls
     });
 
@@ -193,12 +193,12 @@ function testChannelExecution3() returns error? {
 @test:Config
 function testChannelExecution4() returns error? {
     Channel channel = check new ({
-        processor: [
-            dataTypeRouter,
-            filterProcessor,
+        sourceFlow: [
+            dataTypeRouter, 
+            filterProcessor, 
             processProcessor
         ],
-        destination: destinationRouter,
+        destinationsFlow: destinationRouter,
         dlstore: dls
     });
     ExecutionResult result = check channel.execute("'order");
@@ -208,12 +208,12 @@ function testChannelExecution4() returns error? {
 @test:Config
 function testChannelExecution5() returns error? {
     Channel channel = check new ({
-        processor: [
-            dataTypeRouter,
-            filterProcessor,
+        sourceFlow: [
+            dataTypeRouter, 
+            filterProcessor, 
             processProcessor
         ],
-        destination: destinationRouter,
+        destinationsFlow: destinationRouter,
         dlstore: dls
     });
     ExecutionResult|ExecutionError result = channel.execute({"test": "data"});

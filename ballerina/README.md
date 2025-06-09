@@ -1,5 +1,3 @@
-# Reliable Delivery and Processing of Messages in Ballerina
-
 ## Overview
 
 This package is designed to process messages through a configurable channel, ensuring reliable delivery and intelligent handling of failures. The core idea is to process messages step-by-step, with the ability to transform, filter, and deliver them to various destinations, all while maintaining shared information through a central Context object.

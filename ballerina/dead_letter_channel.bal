@@ -1,4 +1,6 @@
 import ballerinax/rabbitmq;
+import ballerina/log;
+import ballerina/io;
 
 # Dead Letter Store Type
 public type DeadLetterStore isolated object {
@@ -8,6 +10,46 @@ public type DeadLetterStore isolated object {
     # + return - An error if the message could not be stored, otherwise returns `()`.
     public isolated function store(Message msg) returns error?;
 };
+
+# Dead Letter Store implemented with a logger.
+public isolated class LoggerDLStore {
+    *DeadLetterStore;
+
+    # Store the message in the dead letter store by logging it.
+    #
+    # + msg - The message to store in the dead letter store.
+    # + return - An error if the message could not be stored, otherwise returns `()`.
+    public isolated function store(Message msg) returns error? {
+        log:printInfo("Storing message in dead letter store", message = msg);
+    }
+}
+
+# Dead Letter Store implemented with a local file system.
+public isolated class LocalFileDeadLetterStore {
+    *DeadLetterStore;
+
+    final string dlsDirectory;
+
+    # Creates a new instance of LocalFileDeadLetterStore.
+    # 
+    # + dlsDirectory - The absolute path to the directory where dead letter messages will be stored.
+    # + return - An error if the store could not be initialized, otherwise returns `()`.
+    public isolated function init(string dlsDirectory) returns error? {
+        self.dlsDirectory = dlsDirectory;
+    }
+
+    # Store the message in the dead letter store.
+    # 
+    # + msg - The message to store in the dead letter store.
+    # + return - An error if the message could not be stored, otherwise returns `()`.
+    public isolated function store(Message msg) returns error? {
+        string id = msg.id;
+        string filePath = self.dlsDirectory + "/" + id + ".json";
+        json msgContent = msg.toJson();
+        check io:fileWriteJson(filePath, msgContent);
+        log:printInfo("message stored in dead letter store", id = id, path = filePath);
+    }
+}
 
 # RabbitMQ Publish Message Configuration
 #
