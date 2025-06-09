@@ -62,13 +62,22 @@ Getting the Event to FHIR Service up and running is straightforward. Follow thes
     scopes = ["patient/*.read", "patient/*.write"]
     ```
 
-5. Run the Service
+5. Create the `replay` directory
+
+    The service will monitor a `replay` directory for failed messages that you want to reprocess. Create this directory in the root of your project:
+
+    ```bash
+    mkdir replay
+    ```
+
+6. Run the Service
 
     With the service built and configured, you can now run it:
 
     ```bash
     bal run target/bin/event_to_fhir_service.jar
     ```
+
     This command starts the Event to FHIR Service, and it will begin listening for incoming custom health data events.
 
 ## Review and Replay Failed Messages

@@ -12,7 +12,7 @@ Config.toml
 
 *.http
 
-data/
+replay/
 dls/
 processed_data/
 
