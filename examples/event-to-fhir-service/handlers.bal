@@ -7,10 +7,9 @@ import ballerinax/health.fhir.r4;
 import ballerinax/health.fhir.r4.international401;
 import ballerinax/health.fhir.r4utils.ccdatofhir;
 import ballerinax/health.fhir.r4.validator;
+import ballerinax/health.hl7v2.utils.v2tofhirr4;
 
 import tharmigan/reliable.messaging;
-
-// import ballerinax/health.hl7v2.utils.v2tofhirr4;
 
 @messaging:FilterConfig {
     name: "EventDataTypeFilter"
@@ -48,9 +47,9 @@ isolated function routeByDataType(messaging:MessageContext ctx) returns messagin
         "patient_data" => {
             return transformToPatientData;
         }
-        // "hl7_data" => {
-        //     return transformToHL7Data;
-        // }
+        "hl7_data" => {
+            return transformToHL7Data;
+        }
         "ccda_data" => {
             return transformToCCDAData;
         }
@@ -65,7 +64,6 @@ isolated function routeByDataType(messaging:MessageContext ctx) returns messagin
 @messaging:TransformerConfig {
     name: "PatientDataTransformer"
 }
-// isolated function transformToPatientData(messaging:MessageContext ctx) returns anydata|error {
 isolated function transformToPatientData(messaging:MessageContext ctx) returns international401:Patient|error {
     anydata payload = ctx.getContent();
     // return payload;
@@ -81,31 +79,32 @@ isolated function transformToPatientData(messaging:MessageContext ctx) returns i
     return fhirPayload;
 }
 
-// @messaging:TransformerConfig {
-//     name: "HL7DataTransformer"
-// }
-// isolated function transformToHL7Data(messaging:MessageContext ctx) returns map<anydata>|error {
-//     anydata payload = ctx.getContent();
-//     HL7Data|error hl7Data = payload.cloneWithType();
-//     if hl7Data is error {
-//         return r4:createFHIRError("Error occurred while cloning the payload", r4:ERROR, r4:INVALID);
-//     }
-//     json|error v2tofhirResult = v2tofhirr4:v2ToFhir(hl7Data.mllpStr);
-//     if v2tofhirResult is json {
-//         log:printInfo(string `FHIR resource mapped: ${v2tofhirResult.toJsonString()}`, mappedData = v2tofhirResult);
-//         r4:Bundle|error fhirPayload = v2tofhirResult.cloneWithType();
-//         if fhirPayload is r4:Bundle {
-//             r4:BundleEntry[] entries = <r4:BundleEntry[]>fhirPayload.entry;
-//             foreach var entry in entries {
-//                 map<anydata> fhirResource = <map<anydata>>entry?.'resource;
-//                 if fhirResource["resourceType"] == "Patient" {
-//                     log:printInfo(string `FHIR resource: ${fhirResource.toJsonString()}`, mappedData = fhirResource);
-//                     return fhirResource;
-//                 }
-//             }
-//         }
-//     }
-// }
+@messaging:TransformerConfig {
+    name: "HL7DataTransformer"
+}
+isolated function transformToHL7Data(messaging:MessageContext ctx) returns map<anydata>|error {
+    anydata payload = ctx.getContent();
+    HL7Data|error hl7Data = payload.cloneWithType();
+    if hl7Data is error {
+        return r4:createFHIRError("Error occurred while cloning the payload", r4:ERROR, r4:INVALID);
+    }
+    json|error v2tofhirResult = v2tofhirr4:v2ToFhir(hl7Data.mllpStr);
+    if v2tofhirResult is json {
+        log:printInfo(string `FHIR resource mapped: ${v2tofhirResult.toJsonString()}`, mappedData = v2tofhirResult);
+        r4:Bundle|error fhirPayload = v2tofhirResult.cloneWithType();
+        if fhirPayload is r4:Bundle {
+            r4:BundleEntry[] entries = <r4:BundleEntry[]>fhirPayload.entry;
+            foreach var entry in entries {
+                map<anydata> fhirResource = <map<anydata>>entry?.'resource;
+                if fhirResource["resourceType"] == "Patient" {
+                    log:printInfo(string `FHIR resource: ${fhirResource.toJsonString()}`, mappedData = fhirResource);
+                    return fhirResource;
+                }
+            }
+        }
+    }
+    return r4:createFHIRError("Error occurred while mapping HL7 data to FHIR", r4:ERROR, r4:INVALID);
+}
 
 @messaging:TransformerConfig {
     name: "CCDADataTransformer"
