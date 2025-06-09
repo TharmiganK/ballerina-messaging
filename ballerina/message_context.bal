@@ -123,7 +123,7 @@ public isolated class MessageContext {
             if self.message.destinationErrors is map<ErrorInfo> {
                 self.message.destinationErrors[handlerName] = errorInfo;
             } else {
-                self.message.destinationErrors = {handlerName: errorInfo};
+                self.message.destinationErrors = {[handlerName]: errorInfo};
             }
         }
     }
