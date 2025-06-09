@@ -1,7 +1,7 @@
 [package]
 org = "tharmigan"
 name = "reliable.messaging"
-version = "0.1.0"
+version = "0.2.0"
 distribution = "2201.12.6"
 
 [build-options]
