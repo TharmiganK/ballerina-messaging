@@ -82,6 +82,7 @@ public isolated class Channel {
     public isolated function replay(Message message) returns ExecutionResult|ExecutionError {
         MessageContext msgContext = new (message);
         log:printDebug("replay channel execution started", msgId = msgContext.getId());
+        msgContext.cleanErrorInfoForReplay();
         return self.executeInternal(msgContext);
     }
 
@@ -110,7 +111,7 @@ public isolated class Channel {
                 log:printDebug("processor execution failed", processorName = processorName, msgId = id, 'error = result);
                 string errorMsg = string `Failed to execute processor: ${processorName} - ${result.message()}`;
                 msgCtxSnapshot.setErrorMsg(errorMsg);
-                msgCtxSnapshot.setErrorStackTrace(result.stackTrace().toString());
+                msgCtxSnapshot.setErrorStackTrace(result);
                 self.addToDLStore(msgCtxSnapshot);
                 return error ExecutionError(errorMsg, message = {...msgCtxSnapshot.toRecord()});
             } else if result is SourceExecutionResult {
@@ -125,21 +126,22 @@ public isolated class Channel {
         if destinations is DestinationRouter {
             // If the destination is a router, execute the router to get the destination.
             DestinationFlow|error? routedDestination = destinations(msgContext);
+            string destinationRouterName = getDestinationRouterName(destinations);
             if routedDestination is error {
                 // If the routing failed, add to dead letter store and return error.
                 log:printDebug("destination routing failed", msgId = id, 'error = routedDestination);
-                string errorMsg = string `Failed to route destination: ${routedDestination.message()}`;
+                string errorMsg = string `Failed to route destination by router: ${destinationRouterName} - ${routedDestination.message()}`;
                 msgCtxSnapshot.setErrorMsg(errorMsg);
-                msgCtxSnapshot.setErrorStackTrace(routedDestination.stackTrace().toString());
+                msgCtxSnapshot.setErrorStackTrace(routedDestination);
                 self.addToDLStore(msgCtxSnapshot);
                 return error ExecutionError(errorMsg, message = {...msgCtxSnapshot.toRecord()});
             } else if routedDestination is () {
                 // If the routing returned no destination, skip further processing.
-                log:printDebug("destination router returned no destination, skipping further processing", msgId = id);
+                log:printDebug("destination router returned no destination, skipping further processing", msgId = id, destinationRouterName = destinationRouterName);
                 return {message: {...msgContext.toRecord()}};
             } else {
                 // If the routing was successful, continue with the destination execution.
-                log:printDebug("destination routing successful", destinationName = getDestinationRouterName(destinations), msgId = id);
+                log:printDebug("destination routing successful", destinationName = getDestinationRouterName(destinations), msgId = id, destinationRouterName = destinationRouterName);
                 targetDestinations = [getDestionationWithProcessors(routedDestination).cloneReadOnly()];
             }
         } else {
@@ -237,19 +239,24 @@ public isolated class Channel {
     }
 
     isolated function reportDestinationFailure(map<error> failedDestinations, MessageContext msgContext) returns ExecutionError {
-        string errorMsg = "Failed to execute destinations: ";
-        foreach var [handlerName, err] in failedDestinations.entries() {
-            errorMsg += handlerName + " - " + err.message() + "; ";
+        string errorMsg;
+        if failedDestinations.length() == 1 {
+            string destinationName = failedDestinations.keys()[0];
+            error failedDestination = failedDestinations.get(destinationName);
+            errorMsg = string `Failed to execute destination: ${destinationName} - ${failedDestination.message()}`;
+            msgContext.setErrorMsg(errorMsg);
+            msgContext.setErrorStackTrace(failedDestination);  
+        } else {
+            errorMsg = "Failed to execute destinations: ";
+            foreach var [handlerName, err] in failedDestinations.entries() {
+                msgContext.addError(handlerName, err);
+                errorMsg += handlerName + ", ";
+            }
+            if errorMsg.length() > 0 {
+                errorMsg = errorMsg.substring(0, errorMsg.length() - 2);
+            }
+            msgContext.setErrorMsg(errorMsg.trim());
         }
-        msgContext.setErrorMsg(errorMsg.trim());
-        string stackTrace = "";
-        foreach var [handlerName, err] in failedDestinations.entries() {
-            stackTrace += handlerName + " - " + err.stackTrace().toString() + "\n";
-        }
-        if stackTrace.length() > 0 {
-            stackTrace = stackTrace.substring(0, stackTrace.length() - 1);
-        }
-        msgContext.setErrorStackTrace(stackTrace);
         self.addToDLStore(msgContext);
         return error ExecutionError(errorMsg, message = {...msgContext.toRecord()});
     }

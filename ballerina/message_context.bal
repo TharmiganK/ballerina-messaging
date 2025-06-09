@@ -113,13 +113,24 @@ public isolated class MessageContext {
         }
     }
 
-    # Set an error on the message context.
+    # Add an error to the message context.
     #
+    # + handlerName - The name of the handler where the error occurred.
     # + err - The error to set on the message context.
-    public isolated function setError(error err) {
+    isolated function addError(string handlerName, error err) {
         lock {
-            self.message.errorMsg = err.message();
-            self.message.errorStackTrace = err.stackTrace().toString();
+            ErrorInfo errorInfo = createErrorInfo(err);
+            if self.message.destinationErrors is map<ErrorInfo> {
+                self.message.destinationErrors[handlerName] = errorInfo;
+            } else {
+                self.message.destinationErrors = {handlerName: errorInfo};
+            }
+        }
+    }
+
+    isolated function setErrorStackTrace(error err) {
+        lock {
+            self.message.errorStackTrace = createStackTrace(err);
         }
     }
 
@@ -132,15 +143,6 @@ public isolated class MessageContext {
         }
     }
 
-    # Set an error stack trace on the message context.
-    #
-    # + stackTrace - The error stack trace to set on the message context.
-    isolated function setErrorStackTrace(string stackTrace) {
-        lock {
-            self.message.errorStackTrace = stackTrace;
-        }
-    }
-
     # Clone the message context.
     #
     # + return - A new instance of MessageContext with the same message.
@@ -150,4 +152,28 @@ public isolated class MessageContext {
             return clonedContext;
         }
     }
+
+    # Clean the error information for replay.
+    isolated function cleanErrorInfoForReplay() {
+        lock {
+            self.message.errorMsg = ();
+            self.message.errorStackTrace = ();
+            self.message.destinationErrors = ();
+        }
+    }
+}
+
+isolated function createErrorInfo(error err) returns ErrorInfo => {
+    message: err.message(),
+    stackTrace: createStackTrace(err),
+    detail: err.detail() is map<anydata> ? <map<anydata>>err.detail() : {}
+};
+
+isolated function createStackTrace(error err) returns string[] {
+    error:StackFrame[] stackTrace = err.stackTrace();
+    string[] stackTraceStrings = [];
+    foreach error:StackFrame frame in stackTrace {
+        stackTraceStrings.push(frame.toString());
+    }
+    return stackTraceStrings;
 }

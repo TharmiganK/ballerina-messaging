@@ -4,15 +4,28 @@
 # + content - The actual content of the message, which can be of any data type.
 # + errorMsg - Optional error message if an error occurred during processing.
 # + errorStackTrace - Optional stack trace of the error if available.
+# + destinationErrors - A map of errors associated with specific destinations, where the key is the destination name and the value is an `ErrorInfo` record.
 # + metadata - Metadata associated with the message, such as processors to skip.
 # + properties - A map of additional properties associated with the message.
 public type Message record {|
     string id;
     anydata content;
     string errorMsg?;
-    string errorStackTrace?;
+    string[] errorStackTrace?;
+    map<ErrorInfo> destinationErrors?;
     MessageMetadata metadata = {};
     map<anydata> properties = {};
+|};
+
+# Error information type.
+# 
+# + message - A descriptive error message.
+# + stackTrace - An array of strings representing the stack trace of the error.
+# + detail - A map containing additional details about the error, which can include any data type.
+public type ErrorInfo record {|
+    string message;
+    string[] stackTrace;
+    map<anydata> detail;
 |};
 
 # Message metadata.
