@@ -9,6 +9,11 @@ listener file:Listener directoryListener = new ({
     recursive: false
 });
 
+type HealthDataEventMessage record {|
+    *messaging:Message;
+    HealthDataEvent content;
+|};
+
 service on directoryListener {
 
     remote function onCreate(file:FileEvent m) {
@@ -24,9 +29,9 @@ service on directoryListener {
             return;
         }
 
-        messaging:Message|error msg = jsonContent.fromJsonWithType();
+        HealthDataEventMessage|error msg = jsonContent.fromJsonWithType();
         if msg is error {
-            log:printError("failed to convert JSON to Message type", 'error = msg);
+            log:printError("failed to convert JSON to HealthDataEventMessage", 'error = msg);
             return;
         }
 

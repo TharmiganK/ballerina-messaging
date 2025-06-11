@@ -19,6 +19,10 @@ service / on httpListener {
                 log:printError("error processing event", 'error = result);
                 continue;
             }
+            if !result.destinationResults.hasKey("FHIRServer") {
+                log:printWarn("FHIRServer destination not found in the result");
+                continue;
+            }
             json createdResource = check result.destinationResults["FHIRServer"].ensureType();
             createdResources.push(createdResource);
         }
