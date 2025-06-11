@@ -229,3 +229,19 @@ To replay a message that has previously failed, you can use the `replay` method 
 ```ballerina
 messaging:ExecutionResult|messaging:ExecutionError replayResult = channel.replay(failedMessage);
 ```
+
+## Message Context
+
+The `messaging:Context` is a central container that holds all information related to the message being processed. It includes the original content, any metadata, and additional state that processors and destinations can share or update during processing.
+
+The following methods are available on the `messaging:Context`:
+
+- `getContent()`: Returns the message content as `anydata`.
+- `getContentWithType()`: Returns the message content as a specific type.
+- `getId()`: Returns the unique identifier of the message.
+- `setProperty(string key, anydata value)`: Sets a property in the context.
+- `getProperty(string key)`: Gets a property from the context.
+- `getPropertyWithType(string key)`: Gets a property from the context with a specific type.
+- `hasProperty(string key)`: Checks if a property exists in the context.
+- `removeProperty(string key)`: Removes a property from the context.
+- `toRecord()`: Converts the context to a record type for easier inspection and debugging.
