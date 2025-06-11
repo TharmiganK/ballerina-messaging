@@ -20,7 +20,7 @@ public isolated class LoggerDLStore {
     # + msg - The message to store in the dead letter store.
     # + return - An error if the message could not be stored, otherwise returns `()`.
     public isolated function store(Message msg) returns error? {
-        log:printInfo("Storing message in dead letter store", message = msg);
+        log:printInfo("storing message in dead letter store", message = msg);
     }
 }
 
@@ -76,10 +76,9 @@ public isolated class RabbitMqDLStore {
     # + port - The RabbitMQ port.
     # + dlqRoutingKey - The routing key for the dead letter queue.
     # + publishConfig - The configuration for publishing messages.
-    # + connectionConfig - The RabbitMQ connection configuration.
     # + return - An error if the store could not be initialized, otherwise returns `()`.
-    public isolated function init(string host, int port, string dlqRoutingKey, RabbitMqPublishMessageConfiguration publishConfig = {}, *rabbitmq:ConnectionConfiguration connectionConfig) returns error? {
-        self.'client = check new (host, port, connectionConfig);
+    public isolated function init(string host, int port, string dlqRoutingKey, *RabbitMqPublishMessageConfiguration publishConfig) returns error? {
+        self.'client = check new (host, port);
         self.publishConfig = publishConfig.cloneReadOnly();
         self.dlqRoutingKey = dlqRoutingKey;
     }
