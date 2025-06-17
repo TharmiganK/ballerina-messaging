@@ -1,8 +1,10 @@
 import ballerina/log;
 import ballerina/uuid;
 
+// isolated map<Channel> channels = {};
+
 # Represents the flow of the message in the channe;, which includes the source flow and the destinations flow.
-# 
+#
 # + sourceFlow - The source flow that processes the message context.
 # + destinationsFlow - The destinations flow that processes the message context and sends the 
 # message to one or more destinations.
@@ -13,10 +15,31 @@ public type MessageFlow record {|
 
 # Represent the configuration for a channel.
 #
-# + dlstore - An optional dead letter store to handle messages that could not be processed.
+# + dlstoreConfig - The configuration related to the dead letter store and replay listener.
 public type ChannelConfiguration record {|
     *MessageFlow;
-    DeadLetterStore? dlstore = ();
+    // DeadLetterStore? dlstore = ();
+    DeadLetterStoreConfiguration dlstoreConfig?;
+|};
+
+# Represents the configuration related to the dead lead store for the channel.
+#
+# + dlstore - The message store that acts as the dead letter store for the channel
+# + listenerConfig - An optional configuration to enable a listener to replay messages
+public type DeadLetterStoreConfiguration record {|
+    MessageStore dlstore;
+    ReplayListenerConfiguration listenerConfig?;
+|};
+
+# Represents the configuration for the replay listener that listens to the message store and replays messages.
+#
+# + enabled - A boolean flag to enable or disable the listener
+# + targetStore - The message store which is listened by the listener. If not provided, the listener
+# will be listened to the dead letter store defined in the channel configuration
+public type ReplayListenerConfiguration record {|
+    boolean enabled = false;
+    MessageStore targetStore?;
+    *MessageStoreListenerConfiguration;
 |};
 
 isolated class SkippedDestination {
@@ -37,15 +60,19 @@ isolated class SkippedDestination {
 public isolated class Channel {
     final readonly & Processor[] sourceProcessors;
     final readonly & (DestinationRouter|DestinationWithProcessors[]) destinations;
-    final DeadLetterStore? dlstore;
+    // final DeadLetterStore? dlstore;
+    final MessageStore? dlstore;
+    final string name;
 
     # Initializes a new instance of Channel with the provided processors and destination.
     #
+    # + name - The unique name to identify the channel.
     # + config - The configuration for the channel, which includes source flow, destinations flow, 
     # and dead letter store.
     # + return - An error if the channel could not be initialized, otherwise returns `()`.
-    public isolated function init(*ChannelConfiguration config) returns Error? {
-        readonly & SourceFlow  sourceFlow = config.sourceFlow.cloneReadOnly(); 
+    public isolated function init(string name, *ChannelConfiguration config) returns Error? {
+        self.name = name;
+        readonly & SourceFlow sourceFlow = config.sourceFlow.cloneReadOnly();
         if sourceFlow is Processor {
             self.sourceProcessors = [sourceFlow];
         } else {
@@ -70,9 +97,26 @@ public isolated class Channel {
             self.destinations = destinationFlows.cloneReadOnly();
         }
 
-        self.dlstore = config.dlstore;
+        DeadLetterStoreConfiguration? dlstoreConfig = config.dlstoreConfig;
+        self.dlstore = dlstoreConfig?.dlstore;
         check validateProcessors(self.sourceProcessors);
         check validateDestinations(self.destinations);
+        if dlstoreConfig?.dlstore is () {
+            log:printWarn("Dead letter store is not configured, messages that fail to process will not be stored");
+        }
+        if dlstoreConfig !is () {
+            check startReplayListener(self, dlstoreConfig);
+        }
+        // lock {
+        //     if channels.hasKey(name) {
+        //         return error Error(string `Channel with name '${name}' already exists`);
+        //     }
+        //     channels[name] = self;
+        // }
+        // error? err = initializeReplayListener();
+        // if err is error {
+        //     return error Error("Failed to initialize replay listener", cause = err);
+        // }
     }
 
     # Replay the channel execution flow.
@@ -242,7 +286,7 @@ public isolated class Channel {
             string destinationName = failedDestinations.keys()[0];
             error failedDestination = failedDestinations.get(destinationName);
             errorMsg = string `Failed to execute destination: ${destinationName} - ${failedDestination.message()}`;
-            msgContext.setError(failedDestination, errorMsg); 
+            msgContext.setError(failedDestination, errorMsg);
         } else {
             errorMsg = "Failed to execute destinations: ";
             foreach var [handlerName, err] in failedDestinations.entries() {
@@ -259,7 +303,8 @@ public isolated class Channel {
     }
 
     isolated function addToDLStore(MessageContext msgContext) {
-        DeadLetterStore? dlstore = self.dlstore;
+        // DeadLetterStore? dlstore = self.dlstore;
+        MessageStore? dlstore = self.dlstore;
         if dlstore is () {
             log:printWarn("dead letter store is not configured, skipping storing the failed message", msgId = msgContext.getId());
             return;
@@ -273,9 +318,13 @@ public isolated class Channel {
         }
         return;
     }
+
+    isolated function getName() returns string {
+        return self.name;
+    }
 }
 
-isolated function getDestionationWithProcessors(DestinationFlow destinationFlow) 
+isolated function getDestionationWithProcessors(DestinationFlow destinationFlow)
         returns DestinationWithProcessors {
     return destinationFlow is DestinationWithProcessors ? destinationFlow : [[], destinationFlow];
 }
@@ -309,7 +358,7 @@ isolated function getProcessorName(Processor processor) returns string {
     return name;
 };
 
-isolated function validateDestinations(DestinationRouter|DestinationWithProcessors[] destinations) 
+isolated function validateDestinations(DestinationRouter|DestinationWithProcessors[] destinations)
         returns Error? {
     if destinations is DestinationRouter {
         string|error routerName = trap getDestinationRouterName(destinations);

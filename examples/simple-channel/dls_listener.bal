@@ -1,17 +1,38 @@
+import tharmigan/reliable.messaging;
+import ballerina/log;
 // import ballerina/file;
-// import ballerina/log;
 // import ballerina/io;
 
-// import tharmigan/reliable.messaging;
+listener messaging:MessageStoreListener dlsListener = check new (
+    messageStore = dlstore,
+    maxRetries = 3,
+    pollingConfig = {
+        pollingInterval: 10,
+        maxMessagesPerPoll: 2
+    }
+);
+
+service on dlsListener {
+
+    public isolated function onMessage(anydata message) returns error? {
+        messaging:Message replayableMessage = check message.toJson().fromJsonWithType();
+        do {
+            _ = check channel.replay(replayableMessage);
+            log:printInfo("message replayed successfully", id = replayableMessage.id);
+        } on fail error err {
+            log:printError("failed to replay message", 'error = err);
+        }
+    }
+}
 
 // listener file:Listener directoryListener = new ({
-//     path: "./replay",
+//     path: "./dls",
 //     recursive: false
 // });
 
 // type HealthDataEventMessage record {|
 //     *messaging:Message;
-//     HealthDataEvent content;
+//     Message content;
 // |};
 
 // service on directoryListener {
@@ -37,7 +58,7 @@
 
 //         removeFile(filePath);
 
-//         messaging:ExecutionResult|messaging:ExecutionError result = msgChannel.replay(msg);
+//         messaging:ExecutionResult|messaging:ExecutionError result = channel.replay(msg);
 //         if result is messaging:ExecutionError {
 //             log:printError("error processing the data file", 'error = result);
 //             return;

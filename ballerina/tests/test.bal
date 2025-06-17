@@ -76,20 +76,30 @@ isolated function specialDestination(MessageContext msgCtx) returns string|error
 }
 
 isolated class MockDLS {
-    *DeadLetterStore;
+    // *DeadLetterStore;
+    *MessageStore;
+
+    public isolated function store(anydata message) returns error? {
+        Message msg = check message.toJson().fromJsonWithType();
+        string fileName = "./target/test-resources/dls/" + msg.id + ".json";
+        check io:fileWriteJson(fileName, msg.toJson());
+        return;
+    }
 
     public isolated function clear() returns error? {
         return;
     }
 
-    public isolated function retrieve() returns Message|error? {
+    public isolated function delete(int count) returns error? {
         return;
     }
 
-    public isolated function store(Message msg) returns error? {
-        string fileName = "./target/test-resources/dls/" + msg.id + ".json";
-        check io:fileWriteJson(fileName, msg.toJson());
-        return;
+    public isolated function retrieve(int count) returns anydata[]|error {
+        return [];
+    }
+
+    public isolated function retrieveAll() returns anydata[]|error {
+        return [];
     }
 }
 
@@ -97,14 +107,14 @@ MockDLS dls = new ();
 
 @test:Config
 function testChannelExecution1() returns error? {
-    Channel channel = check new ({
+    Channel channel = check new ("channel1", {
         sourceFlow: [
-            dataTypeRouter, 
-            filterProcessor, 
+            dataTypeRouter,
+            filterProcessor,
             processProcessor
         ],
         destinationsFlow: destinationRouter,
-        dlstore: dls
+        dlstoreConfig: {dlstore: dls}
     });
 
     Order 'order = {
@@ -124,14 +134,14 @@ function testChannelExecution1() returns error? {
 
 @test:Config
 function testChannelExecution2() returns error? {
-    Channel channel = check new ({
+    Channel channel = check new ("channel2", {
         sourceFlow: [
-            dataTypeRouter, 
-            filterProcessor, 
+            dataTypeRouter,
+            filterProcessor,
             processProcessor
         ],
         destinationsFlow: destinationRouter,
-        dlstore: dls
+        dlstoreConfig: {dlstore: dls}
     });
 
     Order 'order = {
@@ -158,14 +168,14 @@ function testChannelExecution2() returns error? {
 
 @test:Config
 function testChannelExecution3() returns error? {
-    Channel channel = check new ({
+    Channel channel = check new ("channel3", {
         sourceFlow: [
-            dataTypeRouter, 
-            filterProcessor, 
+            dataTypeRouter,
+            filterProcessor,
             processProcessor
         ],
         destinationsFlow: destinationRouter,
-        dlstore: dls
+        dlstoreConfig: {dlstore: dls}
     });
 
     Order 'order = {
@@ -192,14 +202,14 @@ function testChannelExecution3() returns error? {
 
 @test:Config
 function testChannelExecution4() returns error? {
-    Channel channel = check new ({
+    Channel channel = check new ("channel4", {
         sourceFlow: [
-            dataTypeRouter, 
-            filterProcessor, 
+            dataTypeRouter,
+            filterProcessor,
             processProcessor
         ],
         destinationsFlow: destinationRouter,
-        dlstore: dls
+        dlstoreConfig: {dlstore: dls}
     });
     ExecutionResult result = check channel.execute("'order");
     test:assertFalse(result.message.properties.hasKey("transformer"), "Transformer should not be executed for non-json content");
@@ -207,14 +217,14 @@ function testChannelExecution4() returns error? {
 
 @test:Config
 function testChannelExecution5() returns error? {
-    Channel channel = check new ({
+    Channel channel = check new ("channel5", {
         sourceFlow: [
-            dataTypeRouter, 
-            filterProcessor, 
+            dataTypeRouter,
+            filterProcessor,
             processProcessor
         ],
         destinationsFlow: destinationRouter,
-        dlstore: dls
+        dlstoreConfig: {dlstore: dls}
     });
     ExecutionResult|ExecutionError result = channel.execute({"test": "data"});
     if result is ExecutionResult {

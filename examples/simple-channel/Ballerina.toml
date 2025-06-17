@@ -1,11 +1,11 @@
 [package]
 org = "tharmigan"
-name = "event_to_fhir_service"
+name = "simple_channel"
 version = "0.1.0"
 distribution = "2201.12.6"
 
 [build-options]
-optimizeDependencyCompilation = true
+observabilityIncluded = true
 
 [[dependency]]
 org = "tharmigan"

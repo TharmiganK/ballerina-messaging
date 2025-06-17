@@ -9,7 +9,7 @@
 # + metadata - Metadata associated with the message, such as processors to skip.
 # + properties - A map of additional properties associated with the message.
 public type Message record {|
-    string id;
+    readonly string id;
     anydata content;
     string errorMsg?;
     string[] errorStackTrace?;
